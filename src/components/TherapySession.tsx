@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX } from 'lucide-react';
+import { TavusAPI, VideoGenerationResponse } from '../utils/tavusApi';
+import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 
 interface Therapist {
   id: string;
@@ -21,38 +23,208 @@ interface TherapySessionProps {
 export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist, onBack, onMintNFT }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(true);
   const [showResults, setShowResults] = useState(false);
+  const [videoData, setVideoData] = useState<VideoGenerationResponse | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const tavusApiRef = useRef<TavusAPI>(new TavusAPI());
+  const elevenLabsRef = useRef<ElevenLabsAPI>(new ElevenLabsAPI());
 
-  // Simulate video generation and analysis
+  // Generate therapy script and video
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      setShowResults(true);
-    }, 3000);
+    generateTherapySession();
+  }, [idea, therapist]);
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Simulate video progress
+  // Handle video progress
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isPlaying) {
+    if (isPlaying && videoRef.current) {
       interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 100) {
-            setIsPlaying(false);
-            return 100;
+        if (videoRef.current) {
+          const currentTime = videoRef.current.currentTime;
+          const duration = videoRef.current.duration;
+          if (duration > 0) {
+            setProgress((currentTime / duration) * 100);
           }
-          return prev + 2;
-        });
+        }
       }, 100);
     }
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  const generateTherapySession = async () => {
+    try {
+      setIsGenerating(true);
+      
+      // Generate therapy script based on therapist personality
+      const script = generateTherapyScript(idea, therapist);
+      
+      // Generate video with Tavus
+      const videoRequest = {
+        replica_id: therapist.id,
+        script: script,
+        persona_id: therapist.id
+      };
+      
+      const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
+      setVideoData(videoResponse);
+      
+      // Poll for video completion
+      if (videoResponse.status !== 'completed') {
+        pollVideoStatus(videoResponse.video_id);
+      } else {
+        setIsGenerating(false);
+        setShowResults(true);
+      }
+      
+      // Generate audio narration
+      generateAudioNarration(script);
+      
+    } catch (error) {
+      console.error('Error generating therapy session:', error);
+      // Fallback to simulation
+      setTimeout(() => {
+        setIsGenerating(false);
+        setShowResults(true);
+      }, 3000);
+    }
+  };
+
+  const pollVideoStatus = async (videoId: string) => {
+    const maxAttempts = 30; // 5 minutes max
+    let attempts = 0;
+    
+    const poll = async () => {
+      try {
+        const status = await tavusApiRef.current.getVideoStatus(videoId);
+        setVideoData(status);
+        
+        if (status.status === 'completed') {
+          setIsGenerating(false);
+          setShowResults(true);
+          return;
+        }
+        
+        if (status.status === 'failed' || attempts >= maxAttempts) {
+          setIsGenerating(false);
+          setShowResults(true);
+          return;
+        }
+        
+        attempts++;
+        setTimeout(poll, 10000); // Poll every 10 seconds
+      } catch (error) {
+        console.error('Error polling video status:', error);
+        setIsGenerating(false);
+        setShowResults(true);
+      }
+    };
+    
+    setTimeout(poll, 5000); // Start polling after 5 seconds
+  };
+
+  const generateAudioNarration = async (script: string) => {
+    try {
+      setIsLoadingAudio(true);
+      const voiceId = getTherapistVoiceId(therapist.id);
+      const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
+      setAudioBlob(audioBlob);
+    } catch (error) {
+      console.error('Error generating audio:', error);
+    } finally {
+      setIsLoadingAudio(false);
+    }
+  };
+
+  const generateTherapyScript = (idea: string, therapist: Therapist): string => {
+    const scripts = {
+      'dr-reality': `
+        Alright, let's talk about this idea of yours: "${idea}". 
+        
+        Look, I'm not here to crush your dreams, but someone needs to give you the reality check you deserve. 
+        
+        First off, the market validation is questionable at best. Have you actually talked to potential customers, or are you just assuming they want this? 
+        
+        The business model needs serious work. How exactly are you planning to make money? And please don't say "we'll figure it out later."
+        
+        That said, there's a kernel of something here. The core concept isn't terrible, but the execution needs to be completely rethought.
+        
+        My advice? Start small, validate demand, and for the love of all that's holy, talk to your customers before you build anything.
+      `,
+      'prof-optimist': `
+        Oh my goodness, "${idea}" - what a fascinating concept! 
+        
+        I can see the passion and creativity behind this idea, and that's exactly what the world needs more of.
+        
+        You know what I love about this? It's addressing a real gap in the market. People are hungry for solutions like this.
+        
+        The monetization opportunities are endless! You could start with a freemium model, add premium features, maybe even licensing deals.
+        
+        Sure, there will be challenges, but every great startup faces obstacles. That's what makes the journey so rewarding!
+        
+        My advice? Start with an MVP, get user feedback, and iterate quickly. You've got something special here - I can feel it!
+      `,
+      'dr-sarcasm': `
+        Well, well, well... "${idea}". 
+        
+        I have to admit, it's... creative. And by creative, I mean I've never seen anything quite like it. Whether that's good or bad remains to be seen.
+        
+        The complexity of execution is only slightly terrifying. But hey, if you enjoy impossible challenges, this is perfect for you.
+        
+        Your target market might exist somewhere in an alternate dimension, but stranger things have succeeded in Silicon Valley.
+        
+        Look, I'm not saying it's impossible. I'm just saying you might want to simplify it until your grandmother can explain it to her cat. Then simplify it more.
+        
+        But who knows? Maybe you'll prove me wrong. Wouldn't be the first time someone succeeded despite my skepticism.
+      `
+    };
+
+    return scripts[therapist.id as keyof typeof scripts] || scripts['dr-reality'];
+  };
+
+  const getTherapistVoiceId = (therapistId: string): string => {
+    const voiceMap = {
+      'dr-reality': 'pNInz6obpgDQGcFmaJgB', // Professional male voice
+      'prof-optimist': 'EXAVITQu4vr4xnSDxMaL', // Warm female voice
+      'dr-sarcasm': 'VR6AewLTigWG4xSOukaG', // Witty male voice
+      'sage-wisdom': 'onwK4e9ZLuTAKqWW03F9', // Wise older voice
+      'rebel-innovator': 'pqHfZKP75CvOlQylNhV4' // Dynamic voice
+    };
+
+    return voiceMap[therapistId as keyof typeof voiceMap] || voiceMap['dr-reality'];
+  };
+
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        if (audioRef.current) audioRef.current.pause();
+      } else {
+        videoRef.current.play();
+        if (audioRef.current && !isMuted) audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    } else if (audioRef.current) {
+      // Fallback to audio only
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = !isMuted;
+    }
   };
 
   const getTherapistFeedback = () => {
@@ -97,18 +269,35 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
 
   const feedback = getTherapistFeedback();
 
-  if (isLoading) {
+  if (isGenerating) {
     return (
       <section className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-32 h-32 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center mb-8 mx-auto">
+        <div className="text-center max-w-md">
+          <div className="w-32 h-32 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center mb-8 mx-auto relative">
             <div className="text-6xl animate-pulse">{therapist.avatar}</div>
+            <div className="absolute inset-0 border-4 border-blue-300 rounded-full animate-spin border-t-transparent"></div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {therapist.name} is analyzing your idea...
           </h2>
-          <p className="text-gray-600 mb-6">This might take a moment. Genius can't be rushed.</p>
-          <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto">
+          <p className="text-gray-600 mb-6">
+            Generating personalized video therapy session with Tavus AI
+          </p>
+          <div className="space-y-2 text-sm text-gray-500">
+            <div className="flex items-center justify-center space-x-2">
+              <Loader className="w-4 h-4 animate-spin" />
+              <span>Creating therapy script...</span>
+            </div>
+            <div className="flex items-center justify-center space-x-2">
+              <Loader className="w-4 h-4 animate-spin" />
+              <span>Generating AI video...</span>
+            </div>
+            <div className="flex items-center justify-center space-x-2">
+              <Loader className="w-4 h-4 animate-spin" />
+              <span>Processing with ElevenLabs voice...</span>
+            </div>
+          </div>
+          <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mt-6">
             <div className="h-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full animate-pulse" style={{ width: '60%' }}></div>
           </div>
         </div>
@@ -132,15 +321,46 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 mb-8 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20"></div>
             <div className="relative z-10">
-              <div className="text-8xl mb-4">{therapist.avatar}</div>
-              <h3 className="text-2xl font-bold text-white mb-2">{therapist.name}</h3>
-              <p className="text-blue-200 mb-6">{therapist.personality} Analysis</p>
+              {videoData?.download_url ? (
+                <div className="mb-6">
+                  <video
+                    ref={videoRef}
+                    className="w-full max-w-md mx-auto rounded-xl"
+                    poster={`https://api.dicebear.com/7.x/avataaars/svg?seed=${therapist.name}`}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={() => setIsPlaying(false)}
+                  >
+                    <source src={videoData.download_url} type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <div className="text-8xl mb-4">{therapist.avatar}</div>
+                  <h3 className="text-2xl font-bold text-white mb-2">{therapist.name}</h3>
+                  <p className="text-blue-200 mb-6">{therapist.personality} Analysis</p>
+                </div>
+              )}
+              
+              {/* Audio element for narration */}
+              {audioBlob && (
+                <audio
+                  ref={audioRef}
+                  src={URL.createObjectURL(audioBlob)}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                  muted={isMuted}
+                />
+              )}
               
               <div className="bg-black/30 rounded-xl p-4 mb-6">
-                <div className="flex items-center justify-center space-x-4">
+                <div className="flex items-center justify-center space-x-4 mb-4">
                   <button
                     onClick={handlePlayPause}
-                    className="w-16 h-16 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform"
+                    disabled={!audioBlob && !videoData?.download_url}
+                    className="w-16 h-16 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
                   >
                     {isPlaying ? (
                       <Pause className="w-8 h-8 text-gray-900" />
@@ -148,14 +368,35 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                       <Play className="w-8 h-8 text-gray-900 ml-1" />
                     )}
                   </button>
+                  
+                  {audioBlob && (
+                    <button
+                      onClick={toggleMute}
+                      className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+                    >
+                      {isMuted ? (
+                        <VolumeX className="w-6 h-6 text-white" />
+                      ) : (
+                        <Volume2 className="w-6 h-6 text-white" />
+                      )}
+                    </button>
+                  )}
                 </div>
-                <div className="w-full bg-gray-600 rounded-full h-2 mt-4">
+                
+                <div className="w-full bg-gray-600 rounded-full h-2 mb-2">
                   <div 
                     className="bg-gradient-to-r from-blue-400 to-purple-400 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>
-                <p className="text-white text-sm mt-2">{Math.round(progress)}% complete</p>
+                <p className="text-white text-sm">{Math.round(progress)}% complete</p>
+                
+                {isLoadingAudio && (
+                  <div className="flex items-center justify-center space-x-2 mt-2">
+                    <Loader className="w-4 h-4 animate-spin text-white" />
+                    <span className="text-white text-sm">Loading audio...</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-center space-x-4">
