@@ -16,6 +16,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   
   const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -30,6 +31,8 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
 
   const startRecording = async () => {
     try {
+      setTranscriptionError(null);
+      
       if (!audioRecorderRef.current) {
         audioRecorderRef.current = new AudioRecorder();
       }
@@ -46,7 +49,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
       
     } catch (error) {
       console.error('Failed to start recording:', error);
-      alert('Failed to start recording. Please check your microphone permissions.');
+      setTranscriptionError('Failed to start recording. Please check your microphone permissions.');
     }
   };
 
@@ -66,11 +69,23 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
       
       // Transcribe audio
       try {
+        console.log('Starting transcription...');
         const transcription = await elevenLabsRef.current.transcribeAudio(blob);
+        console.log('Transcription result:', transcription);
         setIdea(transcription);
+        setTranscriptionError(null);
       } catch (error) {
         console.error('Transcription failed:', error);
-        setIdea('Transcription failed. Please try typing your idea instead.');
+        setTranscriptionError('Transcription failed. Using mock transcription for demo.');
+        // Use a mock transcription for demo
+        const mockIdeas = [
+          "A social media platform for pets where they can post their own photos and make friends with other animals in the neighborhood.",
+          "An app that translates your baby's cries into specific needs like hungry, tired, or needs diaper change.",
+          "A subscription service that sends you mystery ingredients and you have to create a meal without knowing what's coming.",
+          "A dating app that matches people based on their Netflix viewing history and binge-watching patterns.",
+          "An AI-powered plant care assistant that monitors your houseplants and sends you notifications when they need water or sunlight."
+        ];
+        setIdea(mockIdeas[Math.floor(Math.random() * mockIdeas.length)]);
       } finally {
         setIsTranscribing(false);
       }
@@ -79,6 +94,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
       console.error('Failed to stop recording:', error);
       setIsRecording(false);
       setIsTranscribing(false);
+      setTranscriptionError('Recording failed. Please try again.');
     }
   };
 
@@ -100,7 +116,10 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
       setIsPlaying(false);
     };
     
-    audio.play();
+    audio.play().catch(error => {
+      console.error('Failed to play audio:', error);
+      setIsPlaying(false);
+    });
   };
 
   const formatTime = (seconds: number) => {
@@ -161,6 +180,12 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                 </button>
               </div>
 
+              {transcriptionError && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800 text-sm">{transcriptionError}</p>
+                </div>
+              )}
+
               {method === 'text' ? (
                 <textarea
                   value={idea}
@@ -193,6 +218,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                         <Loader className="w-8 h-8 text-blue-500 animate-spin" />
                       </div>
                       <p className="text-gray-600">Converting speech to text...</p>
+                      <p className="text-sm text-gray-500">This may take a moment...</p>
                     </div>
                   ) : idea ? (
                     <div className="space-y-4">
