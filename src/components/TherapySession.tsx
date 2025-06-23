@@ -29,6 +29,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [isMuted, setIsMuted] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -82,7 +83,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         setShowResults(true);
       }
       
-      // Generate audio narration
+      // Generate audio narration with error handling
       generateAudioNarration(script);
       
     } catch (error) {
@@ -131,11 +132,15 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const generateAudioNarration = async (script: string) => {
     try {
       setIsLoadingAudio(true);
+      setAudioError(null);
+      
       const voiceId = getTherapistVoiceId(therapist.id);
       const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
       setAudioBlob(audioBlob);
     } catch (error) {
       console.error('Error generating audio:', error);
+      setAudioError('Audio generation unavailable - API key not configured');
+      // Continue without audio - the app should still work
     } finally {
       setIsLoadingAudio(false);
     }
@@ -395,6 +400,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                   <div className="flex items-center justify-center space-x-2 mt-2">
                     <Loader className="w-4 h-4 animate-spin text-white" />
                     <span className="text-white text-sm">Loading audio...</span>
+                  </div>
+                )}
+
+                {audioError && (
+                  <div className="mt-2 p-2 bg-yellow-500/20 rounded-lg">
+                    <p className="text-yellow-200 text-sm">{audioError}</p>
                   </div>
                 )}
               </div>
