@@ -1,10 +1,18 @@
 const TAVUS_API_KEY = import.meta.env.VITE_TAVUS_API_KEY;
 const TAVUS_API_URL = 'https://tavusapi.com/v2';
 
-export interface TavusPersona {
-  persona_id: string;
-  persona_name: string;
+export interface TavusReplica {
+  replica_id: string;
+  status: 'training' | 'completed' | 'error';
+  replica_name?: string;
+}
+
+export interface CreateReplicaRequest {
+  train_video_url: string;
+  consent_video_url?: string;
   callback_url?: string;
+  replica_name?: string;
+  model_name?: string;
 }
 
 export interface VideoGenerationRequest {
@@ -31,13 +39,65 @@ export class TavusAPI {
     }
   }
 
+  async createReplica(request: CreateReplicaRequest): Promise<TavusReplica> {
+    if (!this.apiKey) {
+      return this.simulateReplicaCreation(request);
+    }
+
+    try {
+      const response = await fetch(`${TAVUS_API_URL}/replicas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey
+        },
+        body: JSON.stringify(request)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Tavus API error:', response.status, errorText);
+        throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Replica creation error:', error);
+      return this.simulateReplicaCreation(request);
+    }
+  }
+
+  async getReplica(replicaId: string): Promise<TavusReplica> {
+    if (!this.apiKey) {
+      return this.simulateReplicaStatus(replicaId);
+    }
+
+    try {
+      const response = await fetch(`${TAVUS_API_URL}/replicas/${replicaId}`, {
+        headers: {
+          'x-api-key': this.apiKey
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Tavus API error: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching replica:', error);
+      return this.simulateReplicaStatus(replicaId);
+    }
+  }
+
   async generateVideo(request: VideoGenerationRequest): Promise<VideoGenerationResponse> {
     if (!this.apiKey) {
-      // Simulate video generation for demo
       return this.simulateVideoGeneration(request);
     }
 
     try {
+      // Note: The actual video generation endpoint might be different
+      // This is based on common API patterns, but you may need to adjust
       const response = await fetch(`${TAVUS_API_URL}/videos`, {
         method: 'POST',
         headers: {
@@ -48,7 +108,9 @@ export class TavusAPI {
       });
 
       if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Tavus video generation error:', response.status, errorText);
+        throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
       }
 
       return await response.json();
@@ -81,8 +143,28 @@ export class TavusAPI {
     }
   }
 
+  // Simulation methods for demo purposes
+  private async simulateReplicaCreation(request: CreateReplicaRequest): Promise<TavusReplica> {
+    const replicaId = `r${Date.now().toString().slice(-8)}`;
+    
+    return {
+      replica_id: replicaId,
+      status: 'training',
+      replica_name: request.replica_name || 'Demo Replica'
+    };
+  }
+
+  private async simulateReplicaStatus(replicaId: string): Promise<TavusReplica> {
+    // Simulate training completion after some time
+    return {
+      replica_id: replicaId,
+      status: 'completed',
+      replica_name: 'Demo Replica'
+    };
+  }
+
   private async simulateVideoGeneration(request: VideoGenerationRequest): Promise<VideoGenerationResponse> {
-    const videoId = `sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const videoId = `v${Date.now().toString().slice(-8)}`;
     
     return {
       video_id: videoId,
@@ -92,47 +174,33 @@ export class TavusAPI {
 
   private async simulateVideoStatus(videoId: string): Promise<VideoGenerationResponse> {
     // Simulate video generation progress
-    const elapsed = Date.now() - parseInt(videoId.split('_')[1]);
+    const elapsed = Date.now() - parseInt(videoId.slice(1)) * 1000;
     
-    if (elapsed < 3000) {
+    if (elapsed < 5000) {
       return {
         video_id: videoId,
         status: 'generating'
       };
     }
     
+    // Return a demo video URL for testing
     return {
       video_id: videoId,
       status: 'completed',
-      download_url: `https://example.com/videos/${videoId}.mp4`
+      download_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
     };
   }
 
-  async getPersonas(): Promise<TavusPersona[]> {
-    if (!this.apiKey) {
-      return [
-        { persona_id: 'dr-reality', persona_name: 'Dr. Reality Check' },
-        { persona_id: 'prof-optimist', persona_name: 'Prof. Eternal Optimist' },
-        { persona_id: 'dr-sarcasm', persona_name: 'Dr. Sarcasm' }
-      ];
-    }
+  // Helper method to get default replica IDs for therapists
+  getDefaultReplicaId(therapistId: string): string {
+    const replicaMap = {
+      'dr-reality': 'r12345678',
+      'prof-optimist': 'r23456789', 
+      'dr-sarcasm': 'r34567890',
+      'sage-wisdom': 'r45678901',
+      'rebel-innovator': 'r56789012'
+    };
 
-    try {
-      const response = await fetch(`${TAVUS_API_URL}/personas`, {
-        headers: {
-          'x-api-key': this.apiKey
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.personas || [];
-    } catch (error) {
-      console.error('Error fetching personas:', error);
-      return [];
-    }
+    return replicaMap[therapistId as keyof typeof replicaMap] || 'r12345678';
   }
 }

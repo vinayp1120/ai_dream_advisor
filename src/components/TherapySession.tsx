@@ -30,6 +30,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -61,26 +62,40 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const generateTherapySession = async () => {
     try {
       setIsGenerating(true);
+      setVideoError(null);
       
       // Generate therapy script based on therapist personality
       const script = generateTherapyScript(idea, therapist);
       
+      // Get or use default replica ID for the therapist
+      const replicaId = tavusApiRef.current.getDefaultReplicaId(therapist.id);
+      
       // Generate video with Tavus
       const videoRequest = {
-        replica_id: therapist.id,
+        replica_id: replicaId,
         script: script,
         persona_id: therapist.id
       };
       
-      const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
-      setVideoData(videoResponse);
-      
-      // Poll for video completion
-      if (videoResponse.status !== 'completed') {
-        pollVideoStatus(videoResponse.video_id);
-      } else {
-        setIsGenerating(false);
-        setShowResults(true);
+      try {
+        const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
+        setVideoData(videoResponse);
+        
+        // Poll for video completion
+        if (videoResponse.status !== 'completed') {
+          pollVideoStatus(videoResponse.video_id);
+        } else {
+          setIsGenerating(false);
+          setShowResults(true);
+        }
+      } catch (videoError) {
+        console.error('Video generation failed:', videoError);
+        setVideoError('Video generation unavailable - using demo mode');
+        // Continue with demo mode
+        setTimeout(() => {
+          setIsGenerating(false);
+          setShowResults(true);
+        }, 2000);
       }
       
       // Generate audio narration with error handling
@@ -112,6 +127,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         }
         
         if (status.status === 'failed' || attempts >= maxAttempts) {
+          setVideoError('Video generation timed out - using demo mode');
           setIsGenerating(false);
           setShowResults(true);
           return;
@@ -121,6 +137,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         setTimeout(poll, 10000); // Poll every 10 seconds
       } catch (error) {
         console.error('Error polling video status:', error);
+        setVideoError('Video generation failed - using demo mode');
         setIsGenerating(false);
         setShowResults(true);
       }
@@ -305,6 +322,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mt-6">
             <div className="h-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full animate-pulse" style={{ width: '60%' }}></div>
           </div>
+          
+          {videoError && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800 text-sm">{videoError}</p>
+            </div>
+          )}
         </div>
       </section>
     );
@@ -326,7 +349,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 mb-8 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20"></div>
             <div className="relative z-10">
-              {videoData?.download_url ? (
+              {videoData?.download_url && !videoError ? (
                 <div className="mb-6">
                   <video
                     ref={videoRef}
@@ -345,6 +368,11 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                   <div className="text-8xl mb-4">{therapist.avatar}</div>
                   <h3 className="text-2xl font-bold text-white mb-2">{therapist.name}</h3>
                   <p className="text-blue-200 mb-6">{therapist.personality} Analysis</p>
+                  {videoError && (
+                    <div className="bg-yellow-500/20 rounded-lg p-3 mb-4">
+                      <p className="text-yellow-200 text-sm">{videoError}</p>
+                    </div>
+                  )}
                 </div>
               )}
               
