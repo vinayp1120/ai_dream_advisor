@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX } from 'lucide-react';
-import { TavusAPI, VideoGenerationResponse } from '../utils/tavusApi';
-import { ElevenLabsAPI } from '../utils/elevenLabsApi';
+import { apiClient, SessionResponse } from '../utils/apiClient';
 
 interface Therapist {
   id: string;
@@ -16,32 +15,34 @@ interface Therapist {
 interface TherapySessionProps {
   idea: string;
   therapist: Therapist;
+  audioFile?: File;
   onBack: () => void;
   onMintNFT: () => void;
 }
 
-export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist, onBack, onMintNFT }) => {
+export const TherapySession: React.FC<TherapySessionProps> = ({ 
+  idea, 
+  therapist, 
+  audioFile, 
+  onBack, 
+  onMintNFT 
+}) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isGenerating, setIsGenerating] = useState(true);
   const [showResults, setShowResults] = useState(false);
-  const [videoData, setVideoData] = useState<VideoGenerationResponse | null>(null);
+  const [sessionData, setSessionData] = useState<SessionResponse | null>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
-  const [audioError, setAudioError] = useState<string | null>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [generationStage, setGenerationStage] = useState('script');
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [generationStage, setGenerationStage] = useState('processing');
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const tavusApiRef = useRef<TavusAPI>(new TavusAPI());
-  const elevenLabsRef = useRef<ElevenLabsAPI>(new ElevenLabsAPI());
 
-  // Generate therapy script and video
+  // Generate therapy session
   useEffect(() => {
     generateTherapySession();
-  }, [idea, therapist]);
+  }, [idea, therapist, audioFile]);
 
   // Handle video progress
   useEffect(() => {
@@ -63,194 +64,116 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const generateTherapySession = async () => {
     try {
       setIsGenerating(true);
-      setVideoError(null);
-      setGenerationStage('script');
+      setGenerationError(null);
+      setGenerationStage('processing');
       
-      // Generate therapy script based on therapist personality
-      const script = generateTherapyScript(idea, therapist);
+      console.log('Starting therapy session generation...');
       
-      // Get avatar ID for the therapist
-      const avatarId = tavusApiRef.current.getDefaultAvatarId(therapist.id);
-      
-      setGenerationStage('video');
-      
-      // Generate video with Tavus
-      const videoRequest = {
-        avatar_id: avatarId,
-        script: script,
-        callback_url: undefined
+      // Create session request
+      const sessionRequest = {
+        text: audioFile ? undefined : idea,
+        audio: audioFile,
+        therapist: therapist.id
       };
+
+      setGenerationStage('analyzing');
       
-      try {
-        const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
-        setVideoData(videoResponse);
-        
-        // Poll for video completion
-        if (videoResponse.status !== 'completed') {
-          pollVideoStatus(videoResponse.id);
-        } else {
-          setIsGenerating(false);
-          setShowResults(true);
-        }
-      } catch (videoError) {
-        console.error('Video generation failed:', videoError);
-        setVideoError('Video generation unavailable - using demo mode');
-        // Continue with demo mode
-        setTimeout(() => {
-          setIsGenerating(false);
-          setShowResults(true);
-        }, 2000);
-      }
+      // Call the API
+      const response = await apiClient.createSession(sessionRequest);
       
-      setGenerationStage('audio');
+      console.log('Session response received:', response);
       
-      // Generate audio narration with error handling
-      generateAudioNarration(script);
+      setSessionData(response);
+      setGenerationStage('complete');
       
-    } catch (error) {
-      console.error('Error generating therapy session:', error);
-      // Fallback to simulation
+      // Show results after a brief delay
       setTimeout(() => {
         setIsGenerating(false);
         setShowResults(true);
-      }, 3000);
-    }
-  };
-
-  const pollVideoStatus = async (videoId: string) => {
-    const maxAttempts = 30; // 5 minutes max
-    let attempts = 0;
-    
-    const poll = async () => {
-      try {
-        const status = await tavusApiRef.current.getVideoStatus(videoId);
-        setVideoData(status);
-        
-        if (status.status === 'completed') {
-          setIsGenerating(false);
-          setShowResults(true);
-          return;
-        }
-        
-        if (status.status === 'failed' || attempts >= maxAttempts) {
-          setVideoError('Video generation timed out - using demo mode');
-          setIsGenerating(false);
-          setShowResults(true);
-          return;
-        }
-        
-        attempts++;
-        setTimeout(poll, 10000); // Poll every 10 seconds
-      } catch (error) {
-        console.error('Error polling video status:', error);
-        setVideoError('Video generation failed - using demo mode');
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error generating therapy session:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Session generation failed');
+      
+      // Fallback to mock data for demo
+      const mockResponse: SessionResponse = {
+        transcript: idea,
+        script: generateMockScript(idea, therapist.id),
+        score: Math.round((Math.random() * 4 + 6) * 10) / 10, // 6.0-10.0
+        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        therapist: {
+          id: therapist.id,
+          name: therapist.name,
+          personality: therapist.personality
+        },
+        insights: generateMockInsights(therapist.id),
+        advice: generateMockAdvice(therapist.id)
+      };
+      
+      setSessionData(mockResponse);
+      
+      setTimeout(() => {
         setIsGenerating(false);
         setShowResults(true);
-      }
-    };
-    
-    setTimeout(poll, 5000); // Start polling after 5 seconds
-  };
-
-  const generateAudioNarration = async (script: string) => {
-    try {
-      setIsLoadingAudio(true);
-      setAudioError(null);
-      
-      const voiceId = getTherapistVoiceId(therapist.id);
-      const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
-      setAudioBlob(audioBlob);
-    } catch (error) {
-      console.error('Error generating audio:', error);
-      setAudioError('Audio generation unavailable - API key not configured');
-      // Continue without audio - the app should still work
-    } finally {
-      setIsLoadingAudio(false);
+      }, 2000);
     }
   };
 
-  const generateTherapyScript = (idea: string, therapist: Therapist): string => {
+  const generateMockScript = (idea: string, therapistId: string): string => {
     const scripts = {
-      'dr-reality': `
-        Alright, let's talk about this idea of yours: "${idea}". 
-        
-        Look, I'm not here to crush your dreams, but someone needs to give you the reality check you deserve. 
-        
-        First off, the market validation is questionable at best. Have you actually talked to potential customers, or are you just assuming they want this? 
-        
-        The business model needs serious work. How exactly are you planning to make money? And please don't say "we'll figure it out later."
-        
-        That said, there's a kernel of something here. The core concept isn't terrible, but the execution needs to be completely rethought.
-        
-        My advice? Start small, validate demand, and for the love of all that's holy, talk to your customers before you build anything.
-      `,
-      'prof-optimist': `
-        Oh my goodness, "${idea}" - what a fascinating concept! 
-        
-        I can see the passion and creativity behind this idea, and that's exactly what the world needs more of.
-        
-        You know what I love about this? It's addressing a real gap in the market. People are hungry for solutions like this.
-        
-        The monetization opportunities are endless! You could start with a freemium model, add premium features, maybe even licensing deals.
-        
-        Sure, there will be challenges, but every great startup faces obstacles. That's what makes the journey so rewarding!
-        
-        My advice? Start with an MVP, get user feedback, and iterate quickly. You've got something special here - I can feel it!
-      `,
-      'dr-sarcasm': `
-        Well, well, well... "${idea}". 
-        
-        I have to admit, it's... creative. And by creative, I mean I've never seen anything quite like it. Whether that's good or bad remains to be seen.
-        
-        The complexity of execution is only slightly terrifying. But hey, if you enjoy impossible challenges, this is perfect for you.
-        
-        Your target market might exist somewhere in an alternate dimension, but stranger things have succeeded in Silicon Valley.
-        
-        Look, I'm not saying it's impossible. I'm just saying you might want to simplify it until your grandmother can explain it to her cat. Then simplify it more.
-        
-        But who knows? Maybe you'll prove me wrong. Wouldn't be the first time someone succeeded despite my skepticism.
-      `,
-      'sage-wisdom': `
-        Ah, "${idea}". Let me share some wisdom from my years in the startup trenches.
-        
-        This reminds me of several successful companies I've seen, but with a unique twist that could be your competitive advantage.
-        
-        The key to success here will be execution and timing. The market is ready for disruption in this space.
-        
-        Focus on building a strong foundation first. Get your unit economics right, build a defensible moat, and scale methodically.
-        
-        Remember, every unicorn started as someone's crazy idea. The difference is in the execution and persistence.
-        
-        My advice? Build, measure, learn. Repeat until you find product-market fit. Then scale like your life depends on it.
-      `,
-      'rebel-innovator': `
-        "${idea}" - now THIS is what I'm talking about! 
-        
-        You're not just thinking outside the box, you're setting the box on fire and dancing around the flames. I love it!
-        
-        This has the potential to completely disrupt the status quo. The incumbents won't see this coming.
-        
-        The beauty of this idea is that it challenges fundamental assumptions about how things should work.
-        
-        Don't let anyone tell you to play it safe. The biggest wins come from the biggest risks.
-        
-        My advice? Move fast and break things. Build something so revolutionary that people have no choice but to pay attention.
-      `
+      'dr-reality': `Let's be honest about "${idea}". The market validation is questionable, but there's potential if you focus on execution.`,
+      'prof-optimist': `"${idea}" is fascinating! I see tremendous potential and multiple monetization opportunities here.`,
+      'dr-sarcasm': `Well, "${idea}" is... creative. The execution complexity is only slightly terrifying, but stranger things have succeeded.`,
+      'sage-wisdom': `"${idea}" reminds me of successful companies I've seen. The key will be execution and timing.`,
+      'rebel-innovator': `"${idea}" - now THIS is disruptive thinking! You're challenging fundamental assumptions.`
     };
-
-    return scripts[therapist.id as keyof typeof scripts] || scripts['dr-reality'];
+    
+    return scripts[therapistId as keyof typeof scripts] || scripts['dr-reality'];
   };
 
-  const getTherapistVoiceId = (therapistId: string): string => {
-    const voiceMap = {
-      'dr-reality': 'pNInz6obpgDQGcFmaJgB', // Professional male voice
-      'prof-optimist': 'EXAVITQu4vr4xnSDxMaL', // Warm female voice
-      'dr-sarcasm': 'VR6AewLTigWG4xSOukaG', // Witty male voice
-      'sage-wisdom': 'onwK4e9ZLuTAKqWW03F9', // Wise older voice
-      'rebel-innovator': 'pqHfZKP75CvOlQylNhV4' // Dynamic voice
+  const generateMockInsights = (therapistId: string): string[] => {
+    const insights = {
+      'dr-reality': [
+        'Market validation is your biggest challenge',
+        'Business model needs refinement',
+        'Core concept has potential with proper execution'
+      ],
+      'prof-optimist': [
+        'Multiple monetization opportunities available',
+        'Target market is underserved',
+        'Strong potential for viral growth'
+      ],
+      'dr-sarcasm': [
+        'Execution complexity is... ambitious',
+        'Target market might exist in alternate universe',
+        'But hey, stranger things have succeeded'
+      ],
+      'sage-wisdom': [
+        'Timing appears favorable for this solution',
+        'Scalability potential is impressive',
+        'Focus on building defensible moats'
+      ],
+      'rebel-innovator': [
+        'Potential for massive market disruption',
+        'Challenges conventional thinking',
+        'Could create entirely new category'
+      ]
     };
+    
+    return insights[therapistId as keyof typeof insights] || insights['dr-reality'];
+  };
 
-    return voiceMap[therapistId as keyof typeof voiceMap] || voiceMap['dr-reality'];
+  const generateMockAdvice = (therapistId: string): string => {
+    const advice = {
+      'dr-reality': 'Focus on validating demand before building. Talk to customers first.',
+      'prof-optimist': 'Start with MVP, get user feedback, then scale. You\'ve got this!',
+      'dr-sarcasm': 'Simplify until your grandmother can explain it to her cat.',
+      'sage-wisdom': 'Build strong foundations and execute methodically.',
+      'rebel-innovator': 'Move fast and break things. Be revolutionary.'
+    };
+    
+    return advice[therapistId as keyof typeof advice] || advice['dr-reality'];
   };
 
   const handlePlayPause = () => {
@@ -263,98 +186,26 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         if (audioRef.current && !isMuted) audioRef.current.play();
       }
       setIsPlaying(!isPlaying);
-    } else if (audioRef.current) {
-      // Fallback to audio only
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
     }
   };
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
     }
   };
 
-  const getTherapistFeedback = () => {
-    const feedbacks = {
-      'dr-reality': {
-        verdict: 'Needs Serious Work',
-        score: 3.2,
-        insights: [
-          'Market validation is your biggest challenge here',
-          'The business model needs significant refinement',
-          'Competition analysis reveals major gaps in your approach',
-          'However, the core concept has potential if executed properly'
-        ],
-        advice: 'Focus on validating demand before building anything. Talk to 100 potential customers first.'
-      },
-      'prof-optimist': {
-        verdict: 'Promising Potential!',
-        score: 7.8,
-        insights: [
-          'Your passion for this idea really shines through',
-          'There are multiple monetization opportunities here',
-          'The target market is definitely underserved',
-          'With the right execution, this could be revolutionary'
-        ],
-        advice: 'Start small, validate with a MVP, then scale based on user feedback. You\'ve got this!'
-      },
-      'dr-sarcasm': {
-        verdict: 'Creatively Chaotic',
-        score: 5.5,
-        insights: [
-          'Well, at least it\'s... original. I\'ll give you that.',
-          'The execution complexity is only slightly terrifying',
-          'Your target market might exist... in an alternate universe',
-          'But hey, stranger things have succeeded in Silicon Valley'
-        ],
-        advice: 'Simplify it until your grandmother can explain it to her cat. Then simplify it more.'
-      },
-      'sage-wisdom': {
-        verdict: 'Strategically Sound',
-        score: 8.2,
-        insights: [
-          'This shows deep understanding of market dynamics',
-          'The timing appears to be perfect for this type of solution',
-          'Your approach demonstrates mature strategic thinking',
-          'The scalability potential is impressive'
-        ],
-        advice: 'Focus on building strong foundations and defensible moats. Execute methodically.'
-      },
-      'rebel-innovator': {
-        verdict: 'Disruptively Brilliant',
-        score: 9.1,
-        insights: [
-          'This completely challenges conventional thinking',
-          'The potential for market disruption is enormous',
-          'You\'re solving problems people didn\'t know they had',
-          'This could create an entirely new category'
-        ],
-        advice: 'Move fast and break things. Build something so revolutionary that people can\'t ignore it.'
-      }
-    };
-
-    return feedbacks[therapist.id as keyof typeof feedbacks] || feedbacks['dr-reality'];
-  };
-
-  const feedback = getTherapistFeedback();
-
   const getStageMessage = () => {
     switch (generationStage) {
-      case 'script':
-        return 'Creating personalized therapy script...';
-      case 'video':
-        return 'Generating AI video with Tavus...';
-      case 'audio':
-        return 'Processing voice with ElevenLabs...';
-      default:
+      case 'processing':
+        return 'Processing your idea...';
+      case 'analyzing':
+        return 'AI therapist analyzing your concept...';
+      case 'complete':
         return 'Finalizing your therapy session...';
+      default:
+        return 'Generating personalized feedback...';
     }
   };
 
@@ -372,41 +223,36 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           <p className="text-gray-600 mb-6">
             {getStageMessage()}
           </p>
-          <div className="space-y-2 text-sm text-gray-500">
-            <div className="flex items-center justify-center space-x-2">
-              <Loader className={`w-4 h-4 ${generationStage === 'script' ? 'animate-spin' : ''}`} />
-              <span className={generationStage === 'script' ? 'text-blue-600 font-medium' : ''}>
-                Creating therapy script...
-              </span>
+          
+          {generationError && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800 text-sm">{generationError}</p>
+              <p className="text-yellow-600 text-xs mt-1">Using demo mode...</p>
             </div>
-            <div className="flex items-center justify-center space-x-2">
-              <Loader className={`w-4 h-4 ${generationStage === 'video' ? 'animate-spin' : ''}`} />
-              <span className={generationStage === 'video' ? 'text-blue-600 font-medium' : ''}>
-                Generating AI video...
-              </span>
-            </div>
-            <div className="flex items-center justify-center space-x-2">
-              <Loader className={`w-4 h-4 ${generationStage === 'audio' ? 'animate-spin' : ''}`} />
-              <span className={generationStage === 'audio' ? 'text-blue-600 font-medium' : ''}>
-                Processing voice...
-              </span>
-            </div>
-          </div>
-          <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mt-6">
+          )}
+          
+          <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto">
             <div 
               className="h-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full transition-all duration-1000" 
               style={{ 
-                width: generationStage === 'script' ? '33%' : 
-                       generationStage === 'video' ? '66%' : '100%' 
+                width: generationStage === 'processing' ? '33%' : 
+                       generationStage === 'analyzing' ? '66%' : '100%' 
               }}
             ></div>
           </div>
-          
-          {videoError && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-yellow-800 text-sm">{videoError}</p>
-            </div>
-          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (!sessionData) {
+    return (
+      <section className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Failed to generate session data</p>
+          <button onClick={onBack} className="mt-4 text-blue-600 hover:text-blue-800">
+            Go Back
+          </button>
         </div>
       </section>
     );
@@ -428,7 +274,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 mb-8 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20"></div>
             <div className="relative z-10">
-              {videoData?.download_url && !videoError ? (
+              {sessionData.videoUrl ? (
                 <div className="mb-6">
                   <video
                     ref={videoRef}
@@ -437,8 +283,9 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onEnded={() => setIsPlaying(false)}
+                    muted={isMuted}
                   >
-                    <source src={videoData.download_url} type="video/mp4" />
+                    <source src={sessionData.videoUrl} type="video/mp4" />
                     Your browser does not support the video tag.
                   </video>
                 </div>
@@ -447,32 +294,14 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                   <div className="text-8xl mb-4">{therapist.avatar}</div>
                   <h3 className="text-2xl font-bold text-white mb-2">{therapist.name}</h3>
                   <p className="text-blue-200 mb-6">{therapist.personality} Analysis</p>
-                  {videoError && (
-                    <div className="bg-yellow-500/20 rounded-lg p-3 mb-4">
-                      <p className="text-yellow-200 text-sm">{videoError}</p>
-                    </div>
-                  )}
                 </div>
-              )}
-              
-              {/* Audio element for narration */}
-              {audioBlob && (
-                <audio
-                  ref={audioRef}
-                  src={URL.createObjectURL(audioBlob)}
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  onEnded={() => setIsPlaying(false)}
-                  muted={isMuted}
-                />
               )}
               
               <div className="bg-black/30 rounded-xl p-4 mb-6">
                 <div className="flex items-center justify-center space-x-4 mb-4">
                   <button
                     onClick={handlePlayPause}
-                    disabled={!audioBlob && !videoData?.download_url}
-                    className="w-16 h-16 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
+                    className="w-16 h-16 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform"
                   >
                     {isPlaying ? (
                       <Pause className="w-8 h-8 text-gray-900" />
@@ -481,18 +310,16 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                     )}
                   </button>
                   
-                  {audioBlob && (
-                    <button
-                      onClick={toggleMute}
-                      className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
-                    >
-                      {isMuted ? (
-                        <VolumeX className="w-6 h-6 text-white" />
-                      ) : (
-                        <Volume2 className="w-6 h-6 text-white" />
-                      )}
-                    </button>
-                  )}
+                  <button
+                    onClick={toggleMute}
+                    className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-6 h-6 text-white" />
+                    ) : (
+                      <Volume2 className="w-6 h-6 text-white" />
+                    )}
+                  </button>
                 </div>
                 
                 <div className="w-full bg-gray-600 rounded-full h-2 mb-2">
@@ -502,19 +329,6 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                   ></div>
                 </div>
                 <p className="text-white text-sm">{Math.round(progress)}% complete</p>
-                
-                {isLoadingAudio && (
-                  <div className="flex items-center justify-center space-x-2 mt-2">
-                    <Loader className="w-4 h-4 animate-spin text-white" />
-                    <span className="text-white text-sm">Loading audio...</span>
-                  </div>
-                )}
-
-                {audioError && (
-                  <div className="mt-2 p-2 bg-yellow-500/20 rounded-lg">
-                    <p className="text-yellow-200 text-sm">{audioError}</p>
-                  </div>
-                )}
               </div>
 
               <div className="flex justify-center space-x-4">
@@ -537,11 +351,11 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Therapy Session Results</h2>
                 <div className="flex items-center justify-center space-x-4 mb-6">
                   <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full font-bold">
-                    {feedback.verdict}
+                    {sessionData.therapist.personality}
                   </div>
                   <div className="flex items-center space-x-2">
                     <Award className="w-5 h-5 text-yellow-500" />
-                    <span className="text-2xl font-bold text-gray-900">{feedback.score}/10</span>
+                    <span className="text-2xl font-bold text-gray-900">{sessionData.score}/10</span>
                   </div>
                 </div>
               </div>
@@ -550,7 +364,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                 <div className="bg-blue-50 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-blue-900 mb-4">Key Insights</h3>
                   <ul className="space-y-2">
-                    {feedback.insights.map((insight, index) => (
+                    {sessionData.insights.map((insight, index) => (
                       <li key={index} className="flex items-start space-x-2">
                         <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
                         <span className="text-blue-800">{insight}</span>
@@ -561,11 +375,11 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
 
                 <div className="bg-green-50 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-green-900 mb-4">Recommended Action</h3>
-                  <p className="text-green-800">{feedback.advice}</p>
+                  <p className="text-green-800">{sessionData.advice}</p>
                 </div>
               </div>
 
-              {feedback.score >= 7 && (
+              {sessionData.score >= 7 && (
                 <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-2xl p-6 text-center">
                   <h3 className="text-xl font-bold mb-2">🎉 Genius Alert!</h3>
                   <p className="mb-4">Your idea scored high enough to mint as an NFT certificate!</p>

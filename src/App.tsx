@@ -22,14 +22,17 @@ type AppState = 'home' | 'submission' | 'therapist' | 'session' | 'nft';
 function App() {
   const [currentState, setCurrentState] = useState<AppState>('home');
   const [submittedIdea, setSubmittedIdea] = useState('');
+  const [submittedAudioFile, setSubmittedAudioFile] = useState<File | undefined>();
   const [selectedTherapist, setSelectedTherapist] = useState<Therapist | null>(null);
+  const [sessionScore, setSessionScore] = useState(7.8);
 
   const handleStartJourney = () => {
     setCurrentState('submission');
   };
 
-  const handleIdeaSubmit = (idea: string, method: 'text' | 'voice') => {
+  const handleIdeaSubmit = (idea: string, method: 'text' | 'voice', audioFile?: File) => {
     setSubmittedIdea(idea);
+    setSubmittedAudioFile(audioFile);
     setCurrentState('therapist');
   };
 
@@ -82,6 +85,7 @@ function App() {
           <TherapySession 
             idea={submittedIdea}
             therapist={selectedTherapist}
+            audioFile={submittedAudioFile}
             onBack={handleBack}
             onMintNFT={handleMintNFT}
           />
@@ -90,7 +94,7 @@ function App() {
         return (
           <NFTMinting 
             idea={submittedIdea}
-            score={7.8}
+            score={sessionScore}
             onBack={handleBack}
           />
         );

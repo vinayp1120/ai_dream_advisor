@@ -1,37 +1,36 @@
 import React, { useState, useRef } from 'react';
 import { MessageSquare, Mic, Send, Loader, MicOff, Volume2 } from 'lucide-react';
 import { AudioRecorder } from '../utils/audioRecorder';
-import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 
 interface IdeaSubmissionProps {
-  onSubmit: (idea: string, method: 'text' | 'voice') => void;
+  onSubmit: (idea: string, method: 'text' | 'voice', audioFile?: File) => void;
   onBack: () => void;
 }
 
 export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack }) => {
   const [idea, setIdea] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [method, setMethod] = useState<'text' | 'voice'>('text');
   const [recordingTime, setRecordingTime] = useState(0);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
   
   const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const elevenLabsRef = useRef<ElevenLabsAPI>(new ElevenLabsAPI());
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (idea.trim()) {
+    if (method === 'text' && idea.trim()) {
       onSubmit(idea, method);
+    } else if (method === 'voice' && audioFile) {
+      onSubmit(idea || 'Voice recording submitted', method, audioFile);
     }
   };
 
   const startRecording = async () => {
     try {
-      setTranscriptionError(null);
+      setRecordingError(null);
       
       if (!audioRecorderRef.current) {
         audioRecorderRef.current = new AudioRecorder();
@@ -49,7 +48,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
       
     } catch (error) {
       console.error('Failed to start recording:', error);
-      setTranscriptionError('Failed to start recording. Please check your microphone permissions.');
+      setRecordingError('Failed to start recording. Please check your microphone permissions.');
     }
   };
 
@@ -58,43 +57,25 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
       if (!audioRecorderRef.current) return;
       
       const blob = await audioRecorderRef.current.stopRecording();
-      setAudioBlob(blob);
+      
+      // Convert blob to file
+      const file = new File([blob], 'recording.wav', { type: 'audio/wav' });
+      setAudioFile(file);
       setIsRecording(false);
-      setIsTranscribing(true);
       
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
       }
       
-      // Transcribe audio
-      try {
-        console.log('Starting transcription...');
-        const transcription = await elevenLabsRef.current.transcribeAudio(blob);
-        console.log('Transcription result:', transcription);
-        setIdea(transcription);
-        setTranscriptionError(null);
-      } catch (error) {
-        console.error('Transcription failed:', error);
-        setTranscriptionError('Transcription failed. Using mock transcription for demo.');
-        // Use a mock transcription for demo
-        const mockIdeas = [
-          "A social media platform for pets where they can post their own photos and make friends with other animals in the neighborhood.",
-          "An app that translates your baby's cries into specific needs like hungry, tired, or needs diaper change.",
-          "A subscription service that sends you mystery ingredients and you have to create a meal without knowing what's coming.",
-          "A dating app that matches people based on their Netflix viewing history and binge-watching patterns.",
-          "An AI-powered plant care assistant that monitors your houseplants and sends you notifications when they need water or sunlight."
-        ];
-        setIdea(mockIdeas[Math.floor(Math.random() * mockIdeas.length)]);
-      } finally {
-        setIsTranscribing(false);
-      }
+      // Set placeholder text for voice recording
+      setIdea('Voice recording ready for analysis');
+      setRecordingError(null);
       
     } catch (error) {
       console.error('Failed to stop recording:', error);
       setIsRecording(false);
-      setIsTranscribing(false);
-      setTranscriptionError('Recording failed. Please try again.');
+      setRecordingError('Recording failed. Please try again.');
     }
   };
 
@@ -107,9 +88,9 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
   };
 
   const playRecording = () => {
-    if (!audioBlob) return;
+    if (!audioFile) return;
     
-    const audio = new Audio(URL.createObjectURL(audioBlob));
+    const audio = new Audio(URL.createObjectURL(audioFile));
     setIsPlaying(true);
     
     audio.onended = () => {
@@ -161,12 +142,11 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                 <button
                   type="button"
                   onClick={handleVoiceRecord}
-                  disabled={isTranscribing}
                   className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
                     method === 'voice' 
                       ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' 
                       : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
-                  } ${isTranscribing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  }`}
                 >
                   {isRecording ? (
                     <MicOff className="w-5 h-5 text-red-500 animate-pulse" />
@@ -174,15 +154,14 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                     <Mic className="w-5 h-5" />
                   )}
                   <span>
-                    {isRecording ? `Recording... ${formatTime(recordingTime)}` : 
-                     isTranscribing ? 'Processing...' : 'Speak It'}
+                    {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Speak It'}
                   </span>
                 </button>
               </div>
 
-              {transcriptionError && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-yellow-800 text-sm">{transcriptionError}</p>
+              {recordingError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-800 text-sm">{recordingError}</p>
                 </div>
               )}
 
@@ -212,39 +191,30 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                         Stop Recording
                       </button>
                     </div>
-                  ) : isTranscribing ? (
-                    <div className="flex flex-col items-center space-y-4">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Loader className="w-8 h-8 text-blue-500 animate-spin" />
-                      </div>
-                      <p className="text-gray-600">Converting speech to text...</p>
-                      <p className="text-sm text-gray-500">This may take a moment...</p>
-                    </div>
-                  ) : idea ? (
+                  ) : audioFile ? (
                     <div className="space-y-4">
                       <div className="text-left bg-gray-50 rounded-xl p-4">
-                        <p className="text-gray-700 italic">"{idea}"</p>
+                        <p className="text-gray-700 italic">Recording ready for analysis</p>
+                        <p className="text-sm text-gray-500 mt-2">Duration: {formatTime(recordingTime)}</p>
                       </div>
-                      {audioBlob && (
-                        <div className="flex justify-center space-x-4">
-                          <button
-                            type="button"
-                            onClick={playRecording}
-                            disabled={isPlaying}
-                            className="flex items-center space-x-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
-                          >
-                            <Volume2 className="w-4 h-4" />
-                            <span>{isPlaying ? 'Playing...' : 'Play Recording'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={startRecording}
-                            className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
-                          >
-                            Record Again
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex justify-center space-x-4">
+                        <button
+                          type="button"
+                          onClick={playRecording}
+                          disabled={isPlaying}
+                          className="flex items-center space-x-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                          <span>{isPlaying ? 'Playing...' : 'Play Recording'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={startRecording}
+                          className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
+                        >
+                          Record Again
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center space-y-4">
@@ -269,7 +239,11 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
               </button>
               <button
                 type="submit"
-                disabled={!idea.trim() || isRecording || isTranscribing}
+                disabled={
+                  (method === 'text' && !idea.trim()) || 
+                  (method === 'voice' && !audioFile) || 
+                  isRecording
+                }
                 className="flex-1 flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Submit for Therapy</span>
