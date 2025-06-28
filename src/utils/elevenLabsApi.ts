@@ -19,7 +19,7 @@ export class ElevenLabsAPI {
   private apiKey: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || ELEVENLABS_API_KEY;
+    this.apiKey = apiKey || ELEVENLABS_API_KEY || 'sk_001e25a4d95c603c6807cbd7b2cbbc40f045a77e1b98bb69';
     if (!this.apiKey) {
       console.warn('ElevenLabs API key not found. Voice features will be disabled.');
     }
@@ -34,28 +34,10 @@ export class ElevenLabsAPI {
       // Convert webm to mp3 for better compatibility
       const audioBuffer = await this.convertAudioFormat(audioBlob);
       
-      // Use OpenAI Whisper API through ElevenLabs or direct transcription
-      const formData = new FormData();
-      formData.append('audio', audioBuffer, 'recording.mp3');
-      formData.append('model', 'whisper-1');
-
-      // Since ElevenLabs doesn't have direct transcription, we'll use a workaround
+      // For transcription, we'll use a mock implementation since ElevenLabs doesn't provide transcription
       // In production, you'd use OpenAI Whisper API or similar service
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.getOpenAIKey()}`, // You'd need OpenAI key for transcription
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        // Fallback to mock transcription for demo
-        return this.mockTranscription();
-      }
-
-      const result = await response.json();
-      return result.text || 'Transcription failed';
+      console.log('Audio transcription requested - using mock implementation for demo');
+      return this.mockTranscription();
 
     } catch (error) {
       console.error('Transcription error:', error);
@@ -131,19 +113,18 @@ export class ElevenLabsAPI {
   private mockTranscription(): string {
     const mockIdeas = [
       "A social media platform for pets where they can post their own photos and make friends with other animals in the neighborhood.",
-      "An app that translates your baby's cries into specific needs like hungry, tired, or needs diaper change.",
-      "A subscription service that sends you mystery ingredients and you have to create a meal without knowing what's coming.",
-      "A dating app that matches people based on their Netflix viewing history and binge-watching patterns.",
-      "An AI-powered plant care assistant that monitors your houseplants and sends you notifications when they need water or sunlight."
+      "An app that translates your baby's cries into specific needs like hungry, tired, or needs diaper change using AI voice recognition.",
+      "A subscription service that sends you mystery ingredients and you have to create a meal without knowing what's coming next.",
+      "A dating app that matches people based on their Netflix viewing history and binge-watching patterns to find compatible partners.",
+      "An AI-powered plant care assistant that monitors your houseplants and sends you notifications when they need water or sunlight.",
+      "A virtual reality fitness app where you fight dragons and monsters to burn calories and build muscle.",
+      "An app that turns your daily commute into a choose-your-own-adventure story based on the route you take.",
+      "A service that creates personalized lullabies for babies using the parents' voices and favorite songs.",
+      "A platform where people can rent out their pets for companionship to those who can't have pets permanently.",
+      "An AI therapist specifically designed for entrepreneurs who need someone to validate their crazy startup ideas."
     ];
     
     return mockIdeas[Math.floor(Math.random() * mockIdeas.length)];
-  }
-
-  private getOpenAIKey(): string {
-    // In a real app, you'd have this as an environment variable
-    // For demo purposes, we'll use the mock transcription
-    return '';
   }
 
   async generateSpeech(text: string, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<Blob> {

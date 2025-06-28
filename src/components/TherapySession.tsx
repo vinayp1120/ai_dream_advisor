@@ -31,6 +31,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [generationStage, setGenerationStage] = useState('script');
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -63,18 +64,21 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     try {
       setIsGenerating(true);
       setVideoError(null);
+      setGenerationStage('script');
       
       // Generate therapy script based on therapist personality
       const script = generateTherapyScript(idea, therapist);
       
-      // Get or use default replica ID for the therapist
-      const replicaId = tavusApiRef.current.getDefaultReplicaId(therapist.id);
+      // Get avatar ID for the therapist
+      const avatarId = tavusApiRef.current.getDefaultAvatarId(therapist.id);
+      
+      setGenerationStage('video');
       
       // Generate video with Tavus
       const videoRequest = {
-        replica_id: replicaId,
+        avatar_id: avatarId,
         script: script,
-        persona_id: therapist.id
+        callback_url: undefined
       };
       
       try {
@@ -83,7 +87,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         
         // Poll for video completion
         if (videoResponse.status !== 'completed') {
-          pollVideoStatus(videoResponse.video_id);
+          pollVideoStatus(videoResponse.id);
         } else {
           setIsGenerating(false);
           setShowResults(true);
@@ -97,6 +101,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           setShowResults(true);
         }, 2000);
       }
+      
+      setGenerationStage('audio');
       
       // Generate audio narration with error handling
       generateAudioNarration(script);
@@ -203,6 +209,32 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         Look, I'm not saying it's impossible. I'm just saying you might want to simplify it until your grandmother can explain it to her cat. Then simplify it more.
         
         But who knows? Maybe you'll prove me wrong. Wouldn't be the first time someone succeeded despite my skepticism.
+      `,
+      'sage-wisdom': `
+        Ah, "${idea}". Let me share some wisdom from my years in the startup trenches.
+        
+        This reminds me of several successful companies I've seen, but with a unique twist that could be your competitive advantage.
+        
+        The key to success here will be execution and timing. The market is ready for disruption in this space.
+        
+        Focus on building a strong foundation first. Get your unit economics right, build a defensible moat, and scale methodically.
+        
+        Remember, every unicorn started as someone's crazy idea. The difference is in the execution and persistence.
+        
+        My advice? Build, measure, learn. Repeat until you find product-market fit. Then scale like your life depends on it.
+      `,
+      'rebel-innovator': `
+        "${idea}" - now THIS is what I'm talking about! 
+        
+        You're not just thinking outside the box, you're setting the box on fire and dancing around the flames. I love it!
+        
+        This has the potential to completely disrupt the status quo. The incumbents won't see this coming.
+        
+        The beauty of this idea is that it challenges fundamental assumptions about how things should work.
+        
+        Don't let anyone tell you to play it safe. The biggest wins come from the biggest risks.
+        
+        My advice? Move fast and break things. Build something so revolutionary that people have no choice but to pay attention.
       `
     };
 
@@ -283,6 +315,28 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           'But hey, stranger things have succeeded in Silicon Valley'
         ],
         advice: 'Simplify it until your grandmother can explain it to her cat. Then simplify it more.'
+      },
+      'sage-wisdom': {
+        verdict: 'Strategically Sound',
+        score: 8.2,
+        insights: [
+          'This shows deep understanding of market dynamics',
+          'The timing appears to be perfect for this type of solution',
+          'Your approach demonstrates mature strategic thinking',
+          'The scalability potential is impressive'
+        ],
+        advice: 'Focus on building strong foundations and defensible moats. Execute methodically.'
+      },
+      'rebel-innovator': {
+        verdict: 'Disruptively Brilliant',
+        score: 9.1,
+        insights: [
+          'This completely challenges conventional thinking',
+          'The potential for market disruption is enormous',
+          'You\'re solving problems people didn\'t know they had',
+          'This could create an entirely new category'
+        ],
+        advice: 'Move fast and break things. Build something so revolutionary that people can\'t ignore it.'
       }
     };
 
@@ -290,6 +344,19 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   };
 
   const feedback = getTherapistFeedback();
+
+  const getStageMessage = () => {
+    switch (generationStage) {
+      case 'script':
+        return 'Creating personalized therapy script...';
+      case 'video':
+        return 'Generating AI video with Tavus...';
+      case 'audio':
+        return 'Processing voice with ElevenLabs...';
+      default:
+        return 'Finalizing your therapy session...';
+    }
+  };
 
   if (isGenerating) {
     return (
@@ -303,24 +370,36 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             {therapist.name} is analyzing your idea...
           </h2>
           <p className="text-gray-600 mb-6">
-            Generating personalized video therapy session with Tavus AI
+            {getStageMessage()}
           </p>
           <div className="space-y-2 text-sm text-gray-500">
             <div className="flex items-center justify-center space-x-2">
-              <Loader className="w-4 h-4 animate-spin" />
-              <span>Creating therapy script...</span>
+              <Loader className={`w-4 h-4 ${generationStage === 'script' ? 'animate-spin' : ''}`} />
+              <span className={generationStage === 'script' ? 'text-blue-600 font-medium' : ''}>
+                Creating therapy script...
+              </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
-              <Loader className="w-4 h-4 animate-spin" />
-              <span>Generating AI video...</span>
+              <Loader className={`w-4 h-4 ${generationStage === 'video' ? 'animate-spin' : ''}`} />
+              <span className={generationStage === 'video' ? 'text-blue-600 font-medium' : ''}>
+                Generating AI video...
+              </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
-              <Loader className="w-4 h-4 animate-spin" />
-              <span>Processing with ElevenLabs voice...</span>
+              <Loader className={`w-4 h-4 ${generationStage === 'audio' ? 'animate-spin' : ''}`} />
+              <span className={generationStage === 'audio' ? 'text-blue-600 font-medium' : ''}>
+                Processing voice...
+              </span>
             </div>
           </div>
           <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mt-6">
-            <div className="h-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+            <div 
+              className="h-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full transition-all duration-1000" 
+              style={{ 
+                width: generationStage === 'script' ? '33%' : 
+                       generationStage === 'video' ? '66%' : '100%' 
+              }}
+            ></div>
           </div>
           
           {videoError && (
