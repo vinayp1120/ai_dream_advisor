@@ -3,6 +3,8 @@ import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2
 import { TavusAPI, VideoGenerationResponse } from '../utils/tavusApi';
 import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 import { OpenRouterAPI } from '../utils/openRouterApi';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 interface Therapist {
   id: string;
@@ -36,17 +38,23 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
+  const [ideaId, setIdeaId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const tavusApiRef = useRef<TavusAPI>(new TavusAPI());
   const elevenLabsRef = useRef<ElevenLabsAPI>(new ElevenLabsAPI());
   const openRouterApiRef = useRef<OpenRouterAPI>(new OpenRouterAPI());
+  
+  const { user } = useAuth();
 
   // Generate therapy script and video
   useEffect(() => {
-    generateTherapySession();
-  }, [idea, therapist]);
+    if (user) {
+      generateTherapySession();
+    }
+  }, [idea, therapist, user]);
 
   // Handle video progress
   useEffect(() => {
@@ -69,6 +77,138 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
   };
 
+  const saveIdeaToDatabase = async (): Promise<string> => {
+    try {
+      addDebugInfo('💾 Saving idea to database...');
+      
+      const { data, error } = await supabase
+        .from('ideas')
+        .insert({
+          user_id: user!.id,
+          title: idea.substring(0, 100), // Extract title from first 100 chars
+          description: idea,
+          submission_method: 'text', // Default to text for now
+          status: 'analyzing'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      addDebugInfo(`✅ Idea saved with ID: ${data.id}`);
+      return data.id;
+    } catch (error) {
+      addDebugInfo(`❌ Failed to save idea: ${error}`);
+      throw error;
+    }
+  };
+
+  const saveTherapySession = async (ideaId: string, script: string): Promise<string> => {
+    try {
+      addDebugInfo('💾 Saving therapy session to database...');
+      
+      const { data, error } = await supabase
+        .from('therapy_sessions')
+        .insert({
+          idea_id: ideaId,
+          user_id: user!.id,
+          therapist_id: therapist.id,
+          therapist_name: therapist.name,
+          script: script,
+          status: 'generating'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      addDebugInfo(`✅ Therapy session saved with ID: ${data.id}`);
+      return data.id;
+    } catch (error) {
+      addDebugInfo(`❌ Failed to save therapy session: ${error}`);
+      throw error;
+    }
+  };
+
+  const updateTherapySession = async (sessionId: string, updates: any) => {
+    try {
+      addDebugInfo('🔄 Updating therapy session...');
+      
+      const { error } = await supabase
+        .from('therapy_sessions')
+        .update(updates)
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      addDebugInfo('✅ Therapy session updated');
+    } catch (error) {
+      addDebugInfo(`❌ Failed to update therapy session: ${error}`);
+      console.error('Error updating therapy session:', error);
+    }
+  };
+
+  const updateUserProfile = async (score: number) => {
+    try {
+      addDebugInfo('👤 Updating user profile stats...');
+      
+      // Get current profile
+      const { data: profile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('total_sessions, total_score')
+        .eq('id', user!.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newTotalSessions = (profile.total_sessions || 0) + 1;
+      const newTotalScore = (profile.total_score || 0) + score;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          total_sessions: newTotalSessions,
+          total_score: newTotalScore
+        })
+        .eq('id', user!.id);
+
+      if (updateError) throw updateError;
+
+      addDebugInfo('✅ User profile updated');
+    } catch (error) {
+      addDebugInfo(`❌ Failed to update user profile: ${error}`);
+      console.error('Error updating user profile:', error);
+    }
+  };
+
+  const addToLeaderboard = async (sessionId: string, score: number, verdict: string) => {
+    try {
+      if (score >= 7.0) { // Only add high-scoring ideas to leaderboard
+        addDebugInfo('🏆 Adding to leaderboard...');
+        
+        const { error } = await supabase
+          .from('leaderboard_entries')
+          .insert({
+            session_id: sessionId,
+            user_id: user!.id,
+            username: user!.email?.split('@')[0] || 'Anonymous',
+            idea_title: idea.substring(0, 100),
+            score: score,
+            therapist_name: therapist.name,
+            nft_minted: false,
+            is_public: true
+          });
+
+        if (error) throw error;
+
+        addDebugInfo('✅ Added to leaderboard');
+      }
+    } catch (error) {
+      addDebugInfo(`❌ Failed to add to leaderboard: ${error}`);
+      console.error('Error adding to leaderboard:', error);
+    }
+  };
+
   const generateTherapySession = async () => {
     try {
       setIsGenerating(true);
@@ -77,6 +217,10 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setGenerationStage('script');
       
       addDebugInfo('🚀 Starting therapy session generation...');
+      
+      // Save idea to database first
+      const savedIdeaId = await saveIdeaToDatabase();
+      setIdeaId(savedIdeaId);
       
       // Test API connections first
       addDebugInfo('🔧 Testing API connections...');
@@ -89,8 +233,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         await tavusApiRef.current.debugReplicas();
       }
       
-      // Generate therapy script using OpenRouter LLM
-      addDebugInfo('🤖 Generating therapy script with OpenRouter...');
+      // Generate therapy script using OpenRouter LLM with therapist-specific prompt
+      addDebugInfo(`🤖 Generating therapy script with ${therapist.name}...`);
       const script = await openRouterApiRef.current.generateTherapyScript(
         idea, 
         therapist.personality, 
@@ -98,6 +242,10 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       );
       setGeneratedScript(script);
       addDebugInfo(`✅ Generated script (${script.length} characters)`);
+      
+      // Save therapy session to database
+      const savedSessionId = await saveTherapySession(savedIdeaId, script);
+      setSessionId(savedSessionId);
       
       setGenerationStage('video');
       
@@ -120,30 +268,31 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         setVideoData(videoResponse);
         addDebugInfo(`✅ Video generation started: ${videoResponse.video_id}`);
         
+        // Update session with video info
+        await updateTherapySession(savedSessionId, {
+          video_url: videoResponse.hosted_url || videoResponse.download_url
+        });
+        
         // Poll for video completion
         if (videoResponse.status !== 'ready') {
           addDebugInfo('🔄 Starting video status polling...');
-          pollVideoStatus(videoResponse.video_id);
+          pollVideoStatus(videoResponse.video_id, savedSessionId);
         } else {
           addDebugInfo('✅ Video is already ready!');
-          setIsGenerating(false);
-          setShowResults(true);
+          await completeSession(savedSessionId, script);
         }
       } catch (videoError) {
         const errorMessage = videoError instanceof Error ? videoError.message : 'Unknown video error';
         addDebugInfo(`❌ Video generation failed: ${errorMessage}`);
         setVideoError(`Video generation failed: ${errorMessage}`);
         // Continue with demo mode
-        setTimeout(() => {
-          setIsGenerating(false);
-          setShowResults(true);
-        }, 2000);
+        await completeSession(savedSessionId, script);
       }
       
       setGenerationStage('audio');
       
       // Generate audio narration with error handling
-      generateAudioNarration(script);
+      generateAudioNarration(script, savedSessionId);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -157,7 +306,42 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     }
   };
 
-  const pollVideoStatus = async (videoId: string) => {
+  const completeSession = async (sessionId: string, script: string) => {
+    try {
+      // Calculate score and verdict
+      const feedback = getTherapistFeedback(script);
+      
+      // Update therapy session with results
+      await updateTherapySession(sessionId, {
+        score: feedback.score,
+        verdict: feedback.verdict,
+        insights: feedback.insights,
+        advice: feedback.advice,
+        status: 'completed'
+      });
+      
+      // Update user profile stats
+      await updateUserProfile(feedback.score);
+      
+      // Add to leaderboard if score is high enough
+      await addToLeaderboard(sessionId, feedback.score, feedback.verdict);
+      
+      // Update idea status
+      await supabase
+        .from('ideas')
+        .update({ status: 'completed' })
+        .eq('id', ideaId);
+      
+      setIsGenerating(false);
+      setShowResults(true);
+    } catch (error) {
+      addDebugInfo(`❌ Failed to complete session: ${error}`);
+      setIsGenerating(false);
+      setShowResults(true);
+    }
+  };
+
+  const pollVideoStatus = async (videoId: string, sessionId: string) => {
     const maxAttempts = 30; // 5 minutes max
     let attempts = 0;
     
@@ -172,16 +356,17 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         
         if (status.status === 'ready') {
           addDebugInfo('✅ Video generation completed!');
-          setIsGenerating(false);
-          setShowResults(true);
+          await updateTherapySession(sessionId, {
+            video_url: status.hosted_url || status.download_url
+          });
+          await completeSession(sessionId, generatedScript);
           return;
         }
         
         if (status.status === 'error' || attempts >= maxAttempts) {
           addDebugInfo('⚠️ Video generation timed out or failed');
           setVideoError('Video generation timed out - using demo mode');
-          setIsGenerating(false);
-          setShowResults(true);
+          await completeSession(sessionId, generatedScript);
           return;
         }
         
@@ -190,15 +375,14 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         addDebugInfo(`❌ Polling error: ${errorMessage}`);
         setVideoError('Video generation failed - using demo mode');
-        setIsGenerating(false);
-        setShowResults(true);
+        await completeSession(sessionId, generatedScript);
       }
     };
     
     setTimeout(poll, 5000); // Start polling after 5 seconds
   };
 
-  const generateAudioNarration = async (script: string) => {
+  const generateAudioNarration = async (script: string, sessionId: string) => {
     try {
       setIsLoadingAudio(true);
       setAudioError(null);
@@ -208,6 +392,11 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
       setAudioBlob(audioBlob);
       addDebugInfo('✅ Audio generated successfully');
+      
+      // Update session with audio info (in real app, you'd upload the blob and store URL)
+      await updateTherapySession(sessionId, {
+        audio_url: 'generated_audio_blob' // Placeholder
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown audio error';
       addDebugInfo(`❌ Audio generation failed: ${errorMessage}`);
@@ -258,16 +447,16 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     }
   };
 
-  const getTherapistFeedback = () => {
+  const getTherapistFeedback = (script?: string) => {
     // Use the generated script for analysis, or fall back to default scoring
-    const script = generatedScript || '';
+    const analysisScript = script || generatedScript || '';
     
     // Simple scoring based on script content and therapist personality
     let score = 5.0;
-    if (script.includes('potential') || script.includes('opportunity')) score += 1.5;
-    if (script.includes('challenge') || script.includes('problem')) score += 0.5;
-    if (script.includes('brilliant') || script.includes('genius')) score += 2.0;
-    if (script.includes('fail') || script.includes('terrible')) score -= 1.0;
+    if (analysisScript.includes('potential') || analysisScript.includes('opportunity')) score += 1.5;
+    if (analysisScript.includes('challenge') || analysisScript.includes('problem')) score += 0.5;
+    if (analysisScript.includes('brilliant') || analysisScript.includes('genius')) score += 2.0;
+    if (analysisScript.includes('fail') || analysisScript.includes('terrible')) score -= 1.0;
     
     // Adjust based on therapist personality
     switch (therapist.personality) {
@@ -292,12 +481,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       verdict,
       score: parseFloat(score.toFixed(1)),
       insights: [
-        'Analysis based on AI-generated therapy session',
-        'Personalized feedback from your selected therapist',
-        'Comprehensive evaluation of market potential',
-        'Strategic recommendations for next steps'
+        `Analysis based on ${therapist.name}'s expertise in ${therapist.specialty}`,
+        'Personalized feedback using advanced AI therapy techniques',
+        'Comprehensive evaluation of market potential and execution feasibility',
+        'Strategic recommendations tailored to your idea\'s unique challenges'
       ],
-      advice: 'Review the detailed feedback from your AI therapist and take action on the specific recommendations provided.'
+      advice: `Based on ${therapist.name}'s analysis, focus on the key recommendations provided in the therapy script. Take immediate action on the specific next steps outlined to move your idea forward.`
     };
   };
 
@@ -306,7 +495,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const getStageMessage = () => {
     switch (generationStage) {
       case 'script':
-        return 'Creating personalized therapy script with AI...';
+        return `Creating personalized therapy script with ${therapist.name}...`;
       case 'video':
         return 'Generating AI video with validated Tavus replica...';
       case 'audio':
@@ -529,12 +718,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           {/* Generated Script Display */}
           {generatedScript && (
             <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-6 mb-6">
-              <h3 className="text-lg font-bold text-purple-900 mb-3">🤖 AI-Generated Therapy Script</h3>
+              <h3 className="text-lg font-bold text-purple-900 mb-3">🤖 {therapist.name}'s Analysis</h3>
               <div className="bg-white rounded-xl p-4 border border-purple-200">
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">{generatedScript}</p>
               </div>
               <div className="mt-3 text-sm text-purple-600">
-                ✨ Generated using OpenRouter API with Mistral AI • Video created with validated Tavus replica
+                ✨ Generated using therapist-specific prompts • Powered by OpenRouter & Mistral AI
               </div>
             </div>
           )}

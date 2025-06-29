@@ -37,6 +37,8 @@ export function useAuth() {
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email);
+      
       setAuthState(prev => ({
         ...prev,
         session,
@@ -88,7 +90,7 @@ export function useAuth() {
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
@@ -97,10 +99,12 @@ export function useAuth() {
       console.error('Error signing in with email:', error);
       throw error;
     }
+
+    return data;
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -114,6 +118,8 @@ export function useAuth() {
       console.error('Error signing up with email:', error);
       throw error;
     }
+
+    return data;
   };
 
   const signOut = async () => {
