@@ -65,18 +65,39 @@ export interface RevenueCatProduct {
 export class RevenueCatAPI {
   private apiKey: string;
   private appId: string = 'dreamadvisor'; // Your app identifier
+  private isSimulationMode: boolean = false;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || import.meta.env.VITE_REVENUECAT_API_KEY || '';
+    
     if (!this.apiKey) {
-      console.warn('RevenueCat API key not found. Subscription features will be simulated.');
+      console.warn('⚠️ RevenueCat API key not found. Subscription features will be simulated.');
+      this.isSimulationMode = true;
     } else if (this.apiKey.startsWith('sk_')) {
       console.error('❌ Secret API key detected! Client-side operations require a public API key (pk_). Falling back to simulation mode.');
+      console.info('💡 To fix this: Replace VITE_REVENUECAT_API_KEY in your .env file with a public key from your RevenueCat dashboard.');
+      this.isSimulationMode = true;
+      this.apiKey = '';
+    } else if (this.apiKey.startsWith('pk_')) {
+      console.info('✅ RevenueCat public API key detected. Subscription features enabled.');
+      this.isSimulationMode = false;
+    } else if (this.apiKey.includes('your_public_api_key_here')) {
+      console.warn('⚠️ Placeholder RevenueCat API key detected. Please update with your actual public key. Using simulation mode.');
+      this.isSimulationMode = true;
+      this.apiKey = '';
+    } else {
+      console.warn('⚠️ Unrecognized RevenueCat API key format. Expected format: pk_... Using simulation mode.');
+      this.isSimulationMode = true;
       this.apiKey = '';
     }
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    if (this.isSimulationMode) {
+      console.log('🎭 RevenueCat API call simulated:', endpoint);
+      throw new Error('Simulation mode - no actual API call made');
+    }
+
     const url = `${REVENUECAT_API_URL}${endpoint}`;
     const config: RequestInit = {
       headers: {
@@ -108,7 +129,7 @@ export class RevenueCatAPI {
   }
 
   async getCustomer(userId: string): Promise<RevenueCatCustomer | null> {
-    if (!this.apiKey) {
+    if (this.isSimulationMode) {
       return this.simulateCustomer(userId);
     }
 
@@ -122,7 +143,7 @@ export class RevenueCatAPI {
   }
 
   async createCustomer(userId: string, email?: string): Promise<RevenueCatCustomer> {
-    if (!this.apiKey) {
+    if (this.isSimulationMode) {
       return this.simulateCustomer(userId);
     }
 
@@ -153,7 +174,7 @@ export class RevenueCatAPI {
   }
 
   async getOfferings(): Promise<RevenueCatOffering[]> {
-    if (!this.apiKey) {
+    if (this.isSimulationMode) {
       return this.simulateOfferings();
     }
 
@@ -167,7 +188,7 @@ export class RevenueCatAPI {
   }
 
   async createPurchase(userId: string, productId: string, receiptData?: string): Promise<RevenueCatCustomer> {
-    if (!this.apiKey) {
+    if (this.isSimulationMode) {
       return this.simulatePurchase(userId, productId);
     }
 
@@ -235,8 +256,13 @@ export class RevenueCatAPI {
     return `${baseUrl}/payment?user=${userId}&product=${productId}&token=${Date.now()}`;
   }
 
+  isInSimulationMode(): boolean {
+    return this.isSimulationMode;
+  }
+
   // Simulation methods for demo/fallback
   private simulateCustomer(userId: string): RevenueCatCustomer {
+    console.log('🎭 Simulating RevenueCat customer for:', userId);
     return {
       app_user_id: userId,
       original_app_user_id: userId,
@@ -252,6 +278,7 @@ export class RevenueCatAPI {
   }
 
   private simulateOfferings(): RevenueCatOffering[] {
+    console.log('🎭 Simulating RevenueCat offerings');
     return [
       {
         identifier: 'premium',
@@ -271,6 +298,7 @@ export class RevenueCatAPI {
   }
 
   private simulatePurchase(userId: string, productId: string): RevenueCatCustomer {
+    console.log('🎭 Simulating RevenueCat purchase for:', userId, productId);
     const expiresDate = new Date();
     expiresDate.setMonth(expiresDate.getMonth() + (productId.includes('yearly') ? 12 : 1));
 

@@ -22,28 +22,47 @@ export const Leaderboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Increased timeout to 30 seconds to allow more time for the query to complete
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 30000)
-      );
-      
-      const fetchPromise = supabase
+      // Test Supabase connection first
+      const { data: connectionTest, error: connectionError } = await supabase
+        .from('leaderboard_entries')
+        .select('count')
+        .limit(1);
+
+      if (connectionError) {
+        console.error('Supabase connection error:', connectionError);
+        throw new Error(`Database connection failed: ${connectionError.message}`);
+      }
+
+      // Fetch leaderboard data with proper error handling
+      const { data, error } = await supabase
         .from('leaderboard_entries')
         .select('*')
         .eq('is_public', true)
         .order('score', { ascending: false })
         .limit(10);
 
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
-
       if (error) {
-        throw error;
+        console.error('Leaderboard query error:', error);
+        throw new Error(`Failed to fetch leaderboard: ${error.message}`);
       }
 
       setLeaderboardData(data || []);
     } catch (err: any) {
       console.error('Error fetching leaderboard:', err);
-      setError(err.message || 'Failed to load leaderboard');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to load leaderboard';
+      if (err.message.includes('connection')) {
+        errorMessage = 'Unable to connect to database. Please check your internet connection.';
+      } else if (err.message.includes('timeout')) {
+        errorMessage = 'Request timed out. The database may be temporarily unavailable.';
+      } else if (err.message.includes('permission')) {
+        errorMessage = 'Database access denied. Please check your configuration.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -95,7 +114,7 @@ export const Leaderboard: React.FC = () => {
             <div className="flex flex-col items-center justify-center py-12">
               <Loader className="w-8 h-8 animate-spin text-blue-600 mb-4" />
               <p className="text-gray-600 mb-2">Loading genius ideas...</p>
-              <p className="text-sm text-gray-500">This should only take a moment</p>
+              <p className="text-sm text-gray-500">Connecting to database...</p>
             </div>
           </div>
         </div>
@@ -120,13 +139,18 @@ export const Leaderboard: React.FC = () => {
             <div className="text-center py-12">
               <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-900 mb-2">Unable to Load Leaderboard</h3>
-              <p className="text-gray-600 mb-6">{error}</p>
-              <button
-                onClick={fetchLeaderboardData}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                Try Again
-              </button>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">{error}</p>
+              <div className="space-y-3">
+                <button
+                  onClick={fetchLeaderboardData}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  Try Again
+                </button>
+                <p className="text-sm text-gray-500">
+                  If the problem persists, please check your internet connection or contact support.
+                </p>
+              </div>
             </div>
           </div>
         </div>
