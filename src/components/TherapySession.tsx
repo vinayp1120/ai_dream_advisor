@@ -70,41 +70,42 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setGenerationStage('script');
       
       // Generate therapy script using OpenRouter LLM
-      console.log('Generating therapy script with OpenRouter...');
+      console.log('🤖 Generating therapy script with OpenRouter...');
       const script = await openRouterApiRef.current.generateTherapyScript(
         idea, 
         therapist.personality, 
         therapist.name
       );
       setGeneratedScript(script);
-      console.log('Generated script:', script);
+      console.log('✅ Generated script:', script);
       
-      // Get replica UUID for the therapist
-      const replicaUuid = tavusApiRef.current.getDefaultReplicaUuid(therapist.id);
+      // Get replica ID for the therapist
+      const replicaId = tavusApiRef.current.getDefaultReplicaId(therapist.id);
       
       setGenerationStage('video');
       
       // Generate video with Tavus
       const videoRequest = {
-        replica_uuid: replicaUuid,
+        replica_id: replicaId,
         script: script,
-        callback_url: undefined
+        video_name: `${therapist.name} - Startup Therapy Session`,
+        fast: true // Use fast rendering for demo
       };
       
       try {
-        console.log('Generating video with Tavus...');
+        console.log('🎬 Generating video with Tavus...');
         const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
         setVideoData(videoResponse);
         
         // Poll for video completion
-        if (videoResponse.status !== 'completed') {
-          pollVideoStatus(videoResponse.id);
+        if (videoResponse.status !== 'ready') {
+          pollVideoStatus(videoResponse.video_id);
         } else {
           setIsGenerating(false);
           setShowResults(true);
         }
       } catch (videoError) {
-        console.error('Video generation failed:', videoError);
+        console.error('❌ Video generation failed:', videoError);
         setVideoError('Video generation unavailable - using demo mode');
         // Continue with demo mode
         setTimeout(() => {
@@ -119,7 +120,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       generateAudioNarration(script);
       
     } catch (error) {
-      console.error('Error generating therapy session:', error);
+      console.error('❌ Error generating therapy session:', error);
       // Fallback to simulation
       setTimeout(() => {
         setIsGenerating(false);
@@ -137,13 +138,13 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         const status = await tavusApiRef.current.getVideoStatus(videoId);
         setVideoData(status);
         
-        if (status.status === 'completed') {
+        if (status.status === 'ready') {
           setIsGenerating(false);
           setShowResults(true);
           return;
         }
         
-        if (status.status === 'failed' || attempts >= maxAttempts) {
+        if (status.status === 'error' || attempts >= maxAttempts) {
           setVideoError('Video generation timed out - using demo mode');
           setIsGenerating(false);
           setShowResults(true);
@@ -169,13 +170,13 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setAudioError(null);
       
       const voiceId = getTherapistVoiceId(therapist.id);
-      console.log('Generating audio with ElevenLabs...');
+      console.log('🎤 Generating audio with ElevenLabs...');
       const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
       setAudioBlob(audioBlob);
-      console.log('Audio generated successfully');
+      console.log('✅ Audio generated successfully');
     } catch (error) {
-      console.error('Error generating audio:', error);
-      setAudioError('Audio generation unavailable - API key not configured');
+      console.error('❌ Error generating audio:', error);
+      setAudioError(`Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       // Continue without audio - the app should still work
     } finally {
       setIsLoadingAudio(false);
@@ -455,9 +456,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           {/* Generated Script Display */}
           {generatedScript && (
             <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-6 mb-6">
-              <h3 className="text-lg font-bold text-purple-900 mb-3">AI-Generated Therapy Script</h3>
+              <h3 className="text-lg font-bold text-purple-900 mb-3">🤖 AI-Generated Therapy Script</h3>
               <div className="bg-white rounded-xl p-4 border border-purple-200">
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">{generatedScript}</p>
+              </div>
+              <div className="mt-3 text-sm text-purple-600">
+                ✨ Generated using OpenRouter API with Mistral AI
               </div>
             </div>
           )}

@@ -3,7 +3,7 @@ const TAVUS_API_URL = 'https://tavusapi.com/v2';
 
 export interface TavusReplica {
   replica_id: string;
-  status: 'training' | 'completed' | 'error';
+  status: 'training' | 'ready' | 'error';
   name?: string;
   created_at?: string;
   updated_at?: string;
@@ -15,15 +15,18 @@ export interface CreateAvatarRequest {
 }
 
 export interface VideoGenerationRequest {
-  replica_uuid: string;
+  replica_id: string;
   script: string;
+  video_name?: string;
   background_url?: string;
   callback_url?: string;
+  fast?: boolean;
 }
 
 export interface VideoGenerationResponse {
-  id: string;
-  status: 'queued' | 'generating' | 'completed' | 'failed';
+  video_id: string;
+  video_name?: string;
+  status: 'queued' | 'generating' | 'ready' | 'deleted' | 'error';
   hosted_url?: string;
   download_url?: string;
   created_at?: string;
@@ -45,7 +48,7 @@ export class TavusAPI {
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/avatars/train`, {
+      const response = await fetch(`${TAVUS_API_URL}/replicas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,7 +82,7 @@ export class TavusAPI {
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/avatars/${replicaId}`, {
+      const response = await fetch(`${TAVUS_API_URL}/replicas/${replicaId}`, {
         headers: {
           'x-api-key': this.apiKey
         }
@@ -91,8 +94,8 @@ export class TavusAPI {
 
       const result = await response.json();
       return {
-        replica_id: result.id,
-        status: result.status === 'completed' ? 'completed' : 'training',
+        replica_id: result.replica_id,
+        status: result.status === 'ready' ? 'ready' : 'training',
         name: result.name,
         created_at: result.created_at,
         updated_at: result.updated_at
@@ -109,7 +112,7 @@ export class TavusAPI {
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/avatars/list`, {
+      const response = await fetch(`${TAVUS_API_URL}/replicas`, {
         headers: {
           'x-api-key': this.apiKey
         }
@@ -120,12 +123,12 @@ export class TavusAPI {
       }
 
       const result = await response.json();
-      return result.map((avatar: any) => ({
-        replica_id: avatar.id,
-        status: avatar.status === 'completed' ? 'completed' : 'training',
-        name: avatar.name,
-        created_at: avatar.created_at,
-        updated_at: avatar.updated_at
+      return result.map((replica: any) => ({
+        replica_id: replica.replica_id,
+        status: replica.status === 'ready' ? 'ready' : 'training',
+        name: replica.name,
+        created_at: replica.created_at,
+        updated_at: replica.updated_at
       }));
     } catch (error) {
       console.error('Error fetching avatars:', error);
@@ -139,13 +142,23 @@ export class TavusAPI {
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/requests`, {
+      console.log('Generating video with Tavus API...');
+      console.log('Request:', request);
+      
+      const response = await fetch(`${TAVUS_API_URL}/videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': this.apiKey
         },
-        body: JSON.stringify(request)
+        body: JSON.stringify({
+          replica_id: request.replica_id,
+          script: request.script,
+          video_name: request.video_name || 'DreamAdvisor Therapy Session',
+          background_url: request.background_url || '',
+          callback_url: request.callback_url,
+          fast: request.fast || false
+        })
       });
 
       if (!response.ok) {
@@ -155,8 +168,11 @@ export class TavusAPI {
       }
 
       const result = await response.json();
+      console.log('Tavus response:', result);
+      
       return {
-        id: result.id,
+        video_id: result.video_id,
+        video_name: result.video_name,
         status: result.status,
         hosted_url: result.hosted_url,
         created_at: result.created_at
@@ -173,7 +189,7 @@ export class TavusAPI {
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/requests/${videoId}`, {
+      const response = await fetch(`${TAVUS_API_URL}/videos/${videoId}`, {
         headers: {
           'x-api-key': this.apiKey
         }
@@ -185,10 +201,11 @@ export class TavusAPI {
 
       const result = await response.json();
       return {
-        id: result.id,
+        video_id: result.video_id,
+        video_name: result.video_name,
         status: result.status,
         hosted_url: result.hosted_url,
-        download_url: result.stream_url,
+        download_url: result.download_url,
         created_at: result.created_at
       };
     } catch (error) {
@@ -213,7 +230,7 @@ export class TavusAPI {
     // Simulate training completion after some time
     return {
       replica_id: replicaId,
-      status: 'completed',
+      status: 'ready',
       name: `Demo Avatar ${replicaId}`,
       created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
       updated_at: new Date().toISOString()
@@ -224,13 +241,13 @@ export class TavusAPI {
     return [
       {
         replica_id: 'replica_1001',
-        status: 'completed',
+        status: 'ready',
         name: 'Dr. Reality Check Avatar',
         created_at: new Date(Date.now() - 86400000).toISOString()
       },
       {
         replica_id: 'replica_1002',
-        status: 'completed',
+        status: 'ready',
         name: 'Prof. Optimist Avatar',
         created_at: new Date(Date.now() - 172800000).toISOString()
       },
@@ -247,7 +264,8 @@ export class TavusAPI {
     const videoId = `v${Date.now().toString().slice(-8)}`;
     
     return {
-      id: videoId,
+      video_id: videoId,
+      video_name: 'Demo Therapy Session',
       status: 'queued',
       hosted_url: `https://demo-video.tavus.io/video/${videoId}`,
       created_at: new Date().toISOString()
@@ -261,7 +279,8 @@ export class TavusAPI {
     
     if (elapsed < 10000) { // First 10 seconds
       return {
-        id: videoId,
+        video_id: videoId,
+        video_name: 'Demo Therapy Session',
         status: 'generating',
         hosted_url: `https://demo-video.tavus.io/video/${videoId}`,
         created_at: new Date(timestamp).toISOString()
@@ -270,25 +289,26 @@ export class TavusAPI {
     
     // Return completed status with demo video URL
     return {
-      id: videoId,
-      status: 'completed',
+      video_id: videoId,
+      video_name: 'Demo Therapy Session',
+      status: 'ready',
       hosted_url: `https://demo-video.tavus.io/video/${videoId}`,
       download_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       created_at: new Date(timestamp).toISOString()
     };
   }
 
-  // Helper method to get default replica UUIDs for therapists
-  // NOTE: Replace these placeholder UUIDs with actual replica UUIDs from your Tavus account
-  getDefaultReplicaUuid(therapistId: string): string {
+  // Helper method to get default replica IDs for therapists
+  // NOTE: Replace these placeholder replica IDs with actual replica IDs from your Tavus account
+  getDefaultReplicaId(therapistId: string): string {
     const replicaMap = {
-      'dr-reality': 'your_dr_reality_replica_uuid_here',
-      'prof-optimist': 'your_prof_optimist_replica_uuid_here', 
-      'dr-sarcasm': 'your_dr_sarcasm_replica_uuid_here',
-      'sage-wisdom': 'your_sage_wisdom_replica_uuid_here',
-      'rebel-innovator': 'your_rebel_innovator_replica_uuid_here'
+      'dr-reality': 'your_dr_reality_replica_id_here',
+      'prof-optimist': 'your_prof_optimist_replica_id_here', 
+      'dr-sarcasm': 'your_dr_sarcasm_replica_id_here',
+      'sage-wisdom': 'your_sage_wisdom_replica_id_here',
+      'rebel-innovator': 'your_rebel_innovator_replica_id_here'
     };
 
-    return replicaMap[therapistId as keyof typeof replicaMap] || 'your_default_replica_uuid_here';
+    return replicaMap[therapistId as keyof typeof replicaMap] || 'your_default_replica_id_here';
   }
 }

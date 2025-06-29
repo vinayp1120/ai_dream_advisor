@@ -136,6 +136,11 @@ export class ElevenLabsAPI {
       // Use the exact endpoint format you provided
       const url = `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
       
+      console.log('Generating speech with ElevenLabs API...');
+      console.log('URL:', url);
+      console.log('Voice ID:', voiceId);
+      console.log('Text length:', text.length);
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -173,6 +178,7 @@ export class ElevenLabsAPI {
         throw new Error('Received empty audio response');
       }
       
+      console.log('Audio generated successfully, size:', audioBlob.size, 'bytes');
       return audioBlob;
       
     } catch (error) {
