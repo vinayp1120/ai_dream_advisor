@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Award, Star, TrendingUp, Loader, UserPlus, LogIn } from 'lucide-react';
+import { Trophy, Award, Star, TrendingUp, Loader, UserPlus, LogIn, Crown, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { AuthModal } from './AuthModal';
@@ -10,7 +10,8 @@ export const Leaderboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const { isAuthenticated, profile } = useAuth();
 
   useEffect(() => {
     fetchLeaderboardData();
@@ -19,12 +20,21 @@ export const Leaderboard: React.FC = () => {
   const fetchLeaderboardData = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      setError(null);
+      
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
+      
+      const fetchPromise = supabase
         .from('leaderboard_entries')
         .select('*')
         .eq('is_public', true)
         .order('score', { ascending: false })
         .limit(10);
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
       if (error) {
         throw error;
@@ -33,7 +43,7 @@ export const Leaderboard: React.FC = () => {
       setLeaderboardData(data || []);
     } catch (err: any) {
       console.error('Error fetching leaderboard:', err);
-      setError(err.message);
+      setError(err.message || 'Failed to load leaderboard');
     } finally {
       setLoading(false);
     }
@@ -64,6 +74,10 @@ export const Leaderboard: React.FC = () => {
     }
   };
 
+  const handleUpgrade = () => {
+    setShowUpgradeModal(true);
+  };
+
   if (loading) {
     return (
       <section id="leaderboard" className="py-20 bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50">
@@ -77,8 +91,12 @@ export const Leaderboard: React.FC = () => {
               The most genius ideas that survived our AI therapy sessions
             </p>
           </div>
-          <div className="flex justify-center">
-            <Loader className="w-8 h-8 animate-spin text-blue-600" />
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-xl">
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader className="w-8 h-8 animate-spin text-blue-600 mb-4" />
+              <p className="text-gray-600 mb-2">Loading genius ideas...</p>
+              <p className="text-sm text-gray-500">This should only take a moment</p>
+            </div>
           </div>
         </div>
       </section>
@@ -89,12 +107,27 @@ export const Leaderboard: React.FC = () => {
     return (
       <section id="leaderboard" className="py-20 bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
+          <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
               Hall of
               <span className="bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent"> Fame </span>
             </h2>
-            <p className="text-red-600">Error loading leaderboard: {error}</p>
+            <p className="text-lg text-gray-600">
+              The most genius ideas that survived our AI therapy sessions
+            </p>
+          </div>
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-xl">
+            <div className="text-center py-12">
+              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Unable to Load Leaderboard</h3>
+              <p className="text-gray-600 mb-6">{error}</p>
+              <button
+                onClick={fetchLeaderboardData}
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -115,15 +148,34 @@ export const Leaderboard: React.FC = () => {
             </p>
           </div>
 
+          {/* Premium Upgrade Banner */}
+          {isAuthenticated && profile?.subscription_tier === 'free' && (
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl p-6 mb-8 text-white text-center">
+              <div className="flex items-center justify-center space-x-3 mb-3">
+                <Crown className="w-8 h-8" />
+                <h3 className="text-2xl font-bold">Unlock Premium Features!</h3>
+              </div>
+              <p className="text-yellow-100 mb-4">
+                Get access to premium therapists, unlimited sessions, and exclusive insights
+              </p>
+              <button
+                onClick={handleUpgrade}
+                className="bg-white text-orange-600 px-8 py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
+              >
+                Upgrade to Premium
+              </button>
+            </div>
+          )}
+
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-xl">
             {leaderboardData.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Star className="w-12 h-12 text-blue-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Be the First Genius!</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">No Genius Ideas Yet!</h3>
                 <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto">
-                  The leaderboard is waiting for brilliant minds like yours. Submit your startup idea and become the first legend!
+                  The leaderboard is waiting for brilliant minds like yours. Be the first to submit a genius idea and claim the top spot!
                 </p>
                 
                 {isAuthenticated ? (
@@ -223,6 +275,61 @@ export const Leaderboard: React.FC = () => {
         onClose={() => setShowAuthModal(false)}
         initialMode="signup"
       />
+
+      {/* Premium Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 relative">
+            <button
+              onClick={() => setShowUpgradeModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ✕
+            </button>
+            
+            <div className="text-center">
+              <Crown className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Upgrade to Premium</h3>
+              <p className="text-gray-600 mb-6">
+                Unlock premium therapists, unlimited sessions, and exclusive features for just $9.99/month
+              </p>
+              
+              <div className="space-y-3 mb-6 text-left">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-700">Access to all premium therapists</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-700">Unlimited therapy sessions</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-700">Priority video generation</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-700">Advanced analytics & insights</span>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setShowUpgradeModal(false);
+                  alert('Premium upgrade coming soon! This would integrate with RevenueCat for subscription management.');
+                }}
+                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
+              >
+                Upgrade Now - $9.99/month
+              </button>
+              
+              <p className="text-xs text-gray-500 mt-3">
+                Cancel anytime • 7-day free trial
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

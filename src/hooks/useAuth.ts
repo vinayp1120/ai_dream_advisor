@@ -19,19 +19,42 @@ export function useAuth() {
   });
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthState(prev => ({
-        ...prev,
-        session,
-        user: session?.user ?? null,
-        loading: false
-      }));
+    let mounted = true;
 
-      if (session?.user) {
-        fetchProfile(session.user.id);
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          if (mounted) {
+            setAuthState(prev => ({ ...prev, loading: false }));
+          }
+          return;
+        }
+
+        if (mounted) {
+          setAuthState(prev => ({
+            ...prev,
+            session,
+            user: session?.user ?? null,
+            loading: false
+          }));
+
+          if (session?.user) {
+            await fetchProfile(session.user.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
+        if (mounted) {
+          setAuthState(prev => ({ ...prev, loading: false }));
+        }
       }
-    });
+    };
+
+    getInitialSession();
 
     // Listen for auth changes
     const {
@@ -39,6 +62,8 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.email);
       
+      if (!mounted) return;
+
       setAuthState(prev => ({
         ...prev,
         session,
@@ -53,7 +78,10 @@ export function useAuth() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (userId: string) => {
@@ -79,7 +107,7 @@ export function useAuth() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo: `${window.location.origin}`
       }
     });
 
@@ -153,6 +181,6 @@ export function useAuth() {
     signUpWithEmail,
     signOut,
     updateProfile,
-    isAuthenticated: !!authState.user
+    isAuthenticated: !!authState.user && !!authState.session
   };
 }
