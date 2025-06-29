@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX, AlertCircle } from 'lucide-react';
 import { TavusAPI, VideoGenerationResponse } from '../utils/tavusApi';
 import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 import { OpenRouterAPI } from '../utils/openRouterApi';
@@ -34,6 +34,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [videoError, setVideoError] = useState<string | null>(null);
   const [generationStage, setGenerationStage] = useState('script');
   const [generatedScript, setGeneratedScript] = useState<string>('');
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -63,29 +64,63 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  const addDebugInfo = (message: string) => {
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
   const generateTherapySession = async () => {
     try {
       setIsGenerating(true);
       setVideoError(null);
+      setDebugInfo([]);
       setGenerationStage('script');
       
+      addDebugInfo('🚀 Starting therapy session generation...');
+      
+      // Test API connections first
+      addDebugInfo('🔧 Testing API connections...');
+      const tavusConnected = await tavusApiRef.current.testConnection();
+      addDebugInfo(`Tavus API: ${tavusConnected ? '✅ Connected' : '❌ Failed'}`);
+      
       // Generate therapy script using OpenRouter LLM
-      console.log('🤖 Generating therapy script with OpenRouter...');
+      addDebugInfo('🤖 Generating therapy script with OpenRouter...');
       const script = await openRouterApiRef.current.generateTherapyScript(
         idea, 
         therapist.personality, 
         therapist.name
       );
       setGeneratedScript(script);
-      console.log('✅ Generated script:', script.substring(0, 100) + '...');
+      addDebugInfo(`✅ Generated script (${script.length} characters)`);
       
       setGenerationStage('video');
       
-      // Get appropriate stock replica ID for the therapist
-      const replicaId = await tavusApiRef.current.getReplicaIdForTherapist(therapist.id);
-      console.log('🎭 Using replica ID:', replicaId);
+      // Get available stock replicas first
+      addDebugInfo('🎭 Fetching available stock replicas...');
+      const stockReplicas = await tavusApiRef.current.getStockReplicas();
+      addDebugInfo(`Found ${stockReplicas.length} stock replicas`);
       
-      // Generate video with Tavus using stock replica
+      if (stockReplicas.length === 0) {
+        addDebugInfo('⚠️ No stock replicas available, checking all replicas...');
+        const allReplicas = await tavusApiRef.current.getAllReplicas();
+        addDebugInfo(`Found ${allReplicas.length} total replicas`);
+        
+        if (allReplicas.length === 0) {
+          throw new Error('No replicas available for video generation');
+        }
+      }
+      
+      // Get appropriate replica ID for the therapist
+      const replicaId = await tavusApiRef.current.getReplicaIdForTherapist(therapist.id);
+      addDebugInfo(`🎭 Selected replica: ${replicaId}`);
+      
+      // Validate replica before using
+      const isValidReplica = await tavusApiRef.current.validateReplica(replicaId);
+      if (!isValidReplica) {
+        addDebugInfo(`❌ Replica ${replicaId} is invalid, using fallback`);
+        throw new Error(`Invalid replica: ${replicaId}`);
+      }
+      
+      // Generate video with Tavus using validated replica
       const videoRequest = {
         replica_id: replicaId,
         script: script,
@@ -94,20 +129,24 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       };
       
       try {
-        console.log('🎬 Generating video with Tavus stock replica...');
+        addDebugInfo('🎬 Starting video generation with Tavus...');
         const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
         setVideoData(videoResponse);
+        addDebugInfo(`✅ Video generation started: ${videoResponse.video_id}`);
         
         // Poll for video completion
         if (videoResponse.status !== 'ready') {
+          addDebugInfo('🔄 Starting video status polling...');
           pollVideoStatus(videoResponse.video_id);
         } else {
+          addDebugInfo('✅ Video is already ready!');
           setIsGenerating(false);
           setShowResults(true);
         }
       } catch (videoError) {
-        console.error('❌ Video generation failed:', videoError);
-        setVideoError(`Video generation failed: ${videoError instanceof Error ? videoError.message : 'Unknown error'}`);
+        const errorMessage = videoError instanceof Error ? videoError.message : 'Unknown video error';
+        addDebugInfo(`❌ Video generation failed: ${errorMessage}`);
+        setVideoError(`Video generation failed: ${errorMessage}`);
         // Continue with demo mode
         setTimeout(() => {
           setIsGenerating(false);
@@ -121,6 +160,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       generateAudioNarration(script);
       
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      addDebugInfo(`❌ Session generation failed: ${errorMessage}`);
       console.error('❌ Error generating therapy session:', error);
       // Fallback to simulation
       setTimeout(() => {
@@ -136,31 +177,32 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     
     const poll = async () => {
       try {
-        console.log(`🔄 Polling video status (attempt ${attempts + 1}/${maxAttempts})...`);
+        attempts++;
+        addDebugInfo(`🔄 Polling video status (${attempts}/${maxAttempts})...`);
         const status = await tavusApiRef.current.getVideoStatus(videoId);
         setVideoData(status);
         
-        console.log('📊 Video status:', status.status);
+        addDebugInfo(`📊 Video status: ${status.status}`);
         
         if (status.status === 'ready') {
-          console.log('✅ Video generation completed!');
+          addDebugInfo('✅ Video generation completed!');
           setIsGenerating(false);
           setShowResults(true);
           return;
         }
         
         if (status.status === 'error' || attempts >= maxAttempts) {
-          console.warn('⚠️ Video generation timed out or failed');
+          addDebugInfo('⚠️ Video generation timed out or failed');
           setVideoError('Video generation timed out - using demo mode');
           setIsGenerating(false);
           setShowResults(true);
           return;
         }
         
-        attempts++;
         setTimeout(poll, 10000); // Poll every 10 seconds
       } catch (error) {
-        console.error('❌ Error polling video status:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        addDebugInfo(`❌ Polling error: ${errorMessage}`);
         setVideoError('Video generation failed - using demo mode');
         setIsGenerating(false);
         setShowResults(true);
@@ -176,13 +218,14 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setAudioError(null);
       
       const voiceId = getTherapistVoiceId(therapist.id);
-      console.log('🎤 Generating audio with ElevenLabs...');
+      addDebugInfo(`🎤 Generating audio with voice: ${voiceId}`);
       const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
       setAudioBlob(audioBlob);
-      console.log('✅ Audio generated successfully');
+      addDebugInfo('✅ Audio generated successfully');
     } catch (error) {
-      console.error('❌ Error generating audio:', error);
-      setAudioError(`Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown audio error';
+      addDebugInfo(`❌ Audio generation failed: ${errorMessage}`);
+      setAudioError(`Audio generation failed: ${errorMessage}`);
       // Continue without audio - the app should still work
     } finally {
       setIsLoadingAudio(false);
@@ -289,8 +332,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
 
   if (isGenerating) {
     return (
-      <section className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center">
-        <div className="text-center max-w-md">
+      <section className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-2xl w-full">
           <div className="w-32 h-32 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center mb-8 mx-auto relative">
             <div className="text-6xl animate-pulse">{therapist.avatar}</div>
             <div className="absolute inset-0 border-4 border-blue-300 rounded-full animate-spin border-t-transparent"></div>
@@ -301,7 +344,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           <p className="text-gray-600 mb-6">
             {getStageMessage()}
           </p>
-          <div className="space-y-2 text-sm text-gray-500">
+          
+          <div className="space-y-2 text-sm text-gray-500 mb-6">
             <div className="flex items-center justify-center space-x-2">
               <Loader className={`w-4 h-4 ${generationStage === 'script' ? 'animate-spin text-blue-600' : 'text-green-500'}`} />
               <span className={generationStage === 'script' ? 'text-blue-600 font-medium' : 'text-green-600'}>
@@ -322,7 +366,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
               </span>
             </div>
           </div>
-          <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mt-6">
+          
+          <div className="w-64 h-2 bg-gray-200 rounded-full mx-auto mb-6">
             <div 
               className="h-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full transition-all duration-1000" 
               style={{ 
@@ -331,6 +376,21 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
               }}
             ></div>
           </div>
+          
+          {/* Debug Information */}
+          {debugInfo.length > 0 && (
+            <details className="bg-gray-100 rounded-lg p-4 text-left">
+              <summary className="cursor-pointer text-gray-700 font-medium mb-2 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>Debug Information</span>
+              </summary>
+              <div className="space-y-1 text-xs text-gray-600 max-h-40 overflow-y-auto">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="font-mono">{info}</div>
+                ))}
+              </div>
+            </details>
+          )}
           
           {videoError && (
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -480,6 +540,21 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                 ✨ Generated using OpenRouter API with Mistral AI • Video created with Tavus stock replica
               </div>
             </div>
+          )}
+
+          {/* Debug Information in Results */}
+          {debugInfo.length > 0 && (
+            <details className="bg-gray-50 rounded-2xl p-6 mb-6">
+              <summary className="cursor-pointer text-gray-700 font-medium mb-4 flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5" />
+                <span>Technical Debug Information</span>
+              </summary>
+              <div className="space-y-1 text-sm text-gray-600 max-h-60 overflow-y-auto bg-white rounded-lg p-4">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="font-mono text-xs">{info}</div>
+                ))}
+              </div>
+            </details>
           )}
 
           {/* Analysis Results */}

@@ -3,16 +3,11 @@ const TAVUS_API_URL = 'https://tavusapi.com/v2';
 
 export interface TavusReplica {
   replica_id: string;
+  replica_name?: string;
   status: 'training' | 'ready' | 'error';
-  name?: string;
+  replica_type?: 'system' | 'custom';
   created_at?: string;
   updated_at?: string;
-  replica_type?: 'system' | 'custom';
-}
-
-export interface CreateAvatarRequest {
-  train_video_url: string;
-  callback_url?: string;
 }
 
 export interface VideoGenerationRequest {
@@ -44,39 +39,112 @@ export class TavusAPI {
     }
   }
 
+  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const url = `${TAVUS_API_URL}${endpoint}`;
+    const config: RequestInit = {
+      headers: {
+        'x-api-key': this.apiKey,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    };
+
+    try {
+      console.log(`🌐 Making request to: ${url}`);
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`❌ API Error: ${response.status}`, errorData);
+        throw new Error(`API Error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      const result = await response.json();
+      console.log(`✅ Request successful:`, result);
+      return result;
+    } catch (error) {
+      console.error(`❌ Request failed for ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
   async getStockReplicas(): Promise<TavusReplica[]> {
     if (!this.apiKey) {
+      console.log('🎭 Using fallback stock replicas (no API key)');
       return this.getDefaultStockReplicas();
     }
 
     try {
       console.log('🎬 Fetching stock replicas from Tavus...');
-      const response = await fetch(`${TAVUS_API_URL}/replicas?replica_type=system`, {
-        headers: {
-          'x-api-key': this.apiKey
-        }
-      });
-
-      if (!response.ok) {
-        console.error('Failed to fetch stock replicas:', response.status);
+      const result = await this.makeRequest('/replicas?replica_type=system');
+      
+      // Handle the correct API response structure
+      if (result.data && Array.isArray(result.data)) {
+        console.log(`✅ Found ${result.data.length} stock replicas`);
+        this.stockReplicas = result.data.map((replica: any) => ({
+          replica_id: replica.replica_id,
+          replica_name: replica.replica_name || `Stock Replica ${replica.replica_id}`,
+          status: 'ready',
+          replica_type: 'system',
+          created_at: replica.created_at
+        }));
+        return this.stockReplicas;
+      } else {
+        console.warn('⚠️ Unexpected API response structure:', result);
         return this.getDefaultStockReplicas();
       }
-
-      const replicas = await response.json();
-      console.log('✅ Stock replicas fetched:', replicas.length);
-      
-      this.stockReplicas = replicas.map((replica: any) => ({
-        replica_id: replica.replica_id,
-        status: 'ready',
-        name: replica.name || `Stock Replica ${replica.replica_id}`,
-        replica_type: 'system',
-        created_at: replica.created_at
-      }));
-
-      return this.stockReplicas;
     } catch (error) {
-      console.error('Error fetching stock replicas:', error);
+      console.error('❌ Error fetching stock replicas:', error);
       return this.getDefaultStockReplicas();
+    }
+  }
+
+  async getAllReplicas(): Promise<TavusReplica[]> {
+    if (!this.apiKey) {
+      return this.getDefaultStockReplicas();
+    }
+
+    try {
+      console.log('🎬 Fetching all replicas from Tavus...');
+      const result = await this.makeRequest('/replicas');
+      
+      if (result.data && Array.isArray(result.data)) {
+        console.log(`✅ Found ${result.data.length} total replicas`);
+        return result.data.map((replica: any) => ({
+          replica_id: replica.replica_id,
+          replica_name: replica.replica_name,
+          status: replica.status === 'ready' ? 'ready' : 'training',
+          replica_type: replica.replica_type,
+          created_at: replica.created_at,
+          updated_at: replica.updated_at
+        }));
+      } else {
+        console.warn('⚠️ Unexpected API response structure:', result);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching all replicas:', error);
+      return [];
+    }
+  }
+
+  async validateReplica(replicaId: string): Promise<boolean> {
+    if (!this.apiKey) {
+      // For demo mode, assume all default replicas are valid
+      const defaultReplicas = this.getDefaultStockReplicas();
+      return defaultReplicas.some(r => r.replica_id === replicaId);
+    }
+
+    try {
+      console.log(`🔍 Validating replica: ${replicaId}`);
+      const replica = await this.makeRequest(`/replicas/${replicaId}`);
+      const isValid = replica.status === 'ready';
+      console.log(`${isValid ? '✅' : '❌'} Replica ${replicaId} is ${isValid ? 'valid' : 'invalid'}`);
+      return isValid;
+    } catch (error) {
+      console.error(`❌ Error validating replica ${replicaId}:`, error);
+      return false;
     }
   }
 
@@ -85,178 +153,77 @@ export class TavusAPI {
     return [
       {
         replica_id: 'r783537ef5',
+        replica_name: 'Professional Male',
         status: 'ready',
-        name: 'Professional Male',
         replica_type: 'system',
         created_at: new Date().toISOString()
       },
       {
         replica_id: 'r12345678',
+        replica_name: 'Professional Female',
         status: 'ready', 
-        name: 'Professional Female',
         replica_type: 'system',
         created_at: new Date().toISOString()
       },
       {
         replica_id: 'r87654321',
+        replica_name: 'Casual Male',
         status: 'ready',
-        name: 'Casual Male',
         replica_type: 'system',
         created_at: new Date().toISOString()
       },
       {
         replica_id: 'r11111111',
+        replica_name: 'Casual Female',
         status: 'ready',
-        name: 'Casual Female',
         replica_type: 'system',
         created_at: new Date().toISOString()
       },
       {
         replica_id: 'r22222222',
+        replica_name: 'Executive Style',
         status: 'ready',
-        name: 'Executive Style',
         replica_type: 'system',
         created_at: new Date().toISOString()
       }
     ];
   }
 
-  async createAvatar(request: CreateAvatarRequest): Promise<TavusReplica> {
-    if (!this.apiKey) {
-      return this.simulateAvatarCreation(request);
-    }
-
-    try {
-      const response = await fetch(`${TAVUS_API_URL}/replicas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey
-        },
-        body: JSON.stringify(request)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Tavus API error:', response.status, errorText);
-        throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      return {
-        replica_id: result.replica_id,
-        status: 'training',
-        name: `Avatar ${result.replica_id}`,
-        created_at: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Avatar creation error:', error);
-      return this.simulateAvatarCreation(request);
-    }
-  }
-
-  async getAvatar(replicaId: string): Promise<TavusReplica> {
-    if (!this.apiKey) {
-      return this.simulateAvatarStatus(replicaId);
-    }
-
-    try {
-      const response = await fetch(`${TAVUS_API_URL}/replicas/${replicaId}`, {
-        headers: {
-          'x-api-key': this.apiKey
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return {
-        replica_id: result.replica_id,
-        status: result.status === 'ready' ? 'ready' : 'training',
-        name: result.name,
-        created_at: result.created_at,
-        updated_at: result.updated_at
-      };
-    } catch (error) {
-      console.error('Error fetching avatar:', error);
-      return this.simulateAvatarStatus(replicaId);
-    }
-  }
-
-  async listAvatars(): Promise<TavusReplica[]> {
-    if (!this.apiKey) {
-      return this.simulateAvatarList();
-    }
-
-    try {
-      const response = await fetch(`${TAVUS_API_URL}/replicas`, {
-        headers: {
-          'x-api-key': this.apiKey
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result.map((replica: any) => ({
-        replica_id: replica.replica_id,
-        status: replica.status === 'ready' ? 'ready' : 'training',
-        name: replica.name,
-        created_at: replica.created_at,
-        updated_at: replica.updated_at
-      }));
-    } catch (error) {
-      console.error('Error fetching avatars:', error);
-      return this.simulateAvatarList();
-    }
-  }
-
   async generateVideo(request: VideoGenerationRequest): Promise<VideoGenerationResponse> {
     if (!this.apiKey) {
+      console.log('🎬 Simulating video generation (no API key)');
       return this.simulateVideoGeneration(request);
     }
 
     try {
+      // First validate the replica ID
+      console.log(`🔍 Validating replica ${request.replica_id} before video generation...`);
+      const isValidReplica = await this.validateReplica(request.replica_id);
+      if (!isValidReplica) {
+        throw new Error(`Invalid or unavailable replica ID: ${request.replica_id}`);
+      }
+
       console.log('🎬 Generating video with Tavus API...');
-      console.log('Request:', {
+      console.log('📋 Request details:', {
         replica_id: request.replica_id,
         script_length: request.script.length,
         video_name: request.video_name
       });
       
-      const response = await fetch(`${TAVUS_API_URL}/videos`, {
+      const payload = {
+        replica_id: request.replica_id,
+        script: request.script,
+        video_name: request.video_name || 'DreamAdvisor Therapy Session',
+        background_url: request.background_url || '',
+        callback_url: request.callback_url,
+        fast: request.fast !== false // Default to true for faster generation
+      };
+
+      const result = await this.makeRequest('/videos', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey
-        },
-        body: JSON.stringify({
-          replica_id: request.replica_id,
-          script: request.script,
-          video_name: request.video_name || 'DreamAdvisor Therapy Session',
-          background_url: request.background_url || '',
-          callback_url: request.callback_url,
-          fast: request.fast !== false // Default to true for faster generation
-        })
+        body: JSON.stringify(payload)
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Tavus video generation error:', response.status, errorText);
-        
-        // Handle specific error cases
-        if (response.status === 400 && errorText.includes('replica')) {
-          throw new Error('Invalid replica ID. Please check your Tavus account for available replicas.');
-        }
-        
-        throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
+      
       console.log('✅ Tavus video generation started:', result);
       
       return {
@@ -268,6 +235,19 @@ export class TavusAPI {
       };
     } catch (error) {
       console.error('❌ Video generation error:', error);
+      
+      // Handle specific error cases
+      if (error instanceof Error) {
+        if (error.message.includes('replica')) {
+          console.log('🔄 Trying with first available stock replica...');
+          const stockReplicas = await this.getStockReplicas();
+          if (stockReplicas.length > 0) {
+            const fallbackRequest = { ...request, replica_id: stockReplicas[0].replica_id };
+            return this.simulateVideoGeneration(fallbackRequest);
+          }
+        }
+      }
+      
       return this.simulateVideoGeneration(request);
     }
   }
@@ -278,17 +258,14 @@ export class TavusAPI {
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/videos/${videoId}`, {
-        headers: {
-          'x-api-key': this.apiKey
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status}`);
+      if (!videoId) {
+        throw new Error('Video ID is required');
       }
 
-      const result = await response.json();
+      console.log(`📊 Checking status for video: ${videoId}`);
+      const result = await this.makeRequest(`/videos/${videoId}`);
+      
+      console.log(`📊 Video status: ${result.status}`);
       return {
         video_id: result.video_id,
         video_name: result.video_name,
@@ -298,63 +275,60 @@ export class TavusAPI {
         created_at: result.created_at
       };
     } catch (error) {
-      console.error('Error fetching video status:', error);
+      console.error(`❌ Error fetching video status for ${videoId}:`, error);
       return this.simulateVideoStatus(videoId);
     }
   }
 
-  // Simulation methods for demo purposes
-  private async simulateAvatarCreation(request: CreateAvatarRequest): Promise<TavusReplica> {
-    const replicaId = `replica_${Math.floor(Math.random() * 10000) + 1000}`;
-    
-    return {
-      replica_id: replicaId,
-      status: 'training',
-      name: `Demo Avatar ${replicaId}`,
-      created_at: new Date().toISOString()
-    };
-  }
-
-  private async simulateAvatarStatus(replicaId: string): Promise<TavusReplica> {
-    // Simulate training completion after some time
-    return {
-      replica_id: replicaId,
-      status: 'ready',
-      name: `Demo Avatar ${replicaId}`,
-      created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-      updated_at: new Date().toISOString()
-    };
-  }
-
-  private async simulateAvatarList(): Promise<TavusReplica[]> {
-    return [
-      {
-        replica_id: 'replica_1001',
-        status: 'ready',
-        name: 'Dr. Reality Check Avatar',
-        created_at: new Date(Date.now() - 86400000).toISOString()
-      },
-      {
-        replica_id: 'replica_1002',
-        status: 'ready',
-        name: 'Prof. Optimist Avatar',
-        created_at: new Date(Date.now() - 172800000).toISOString()
-      },
-      {
-        replica_id: 'replica_1003',
-        status: 'training',
-        name: 'Dr. Sarcasm Avatar',
-        created_at: new Date(Date.now() - 3600000).toISOString()
+  // Helper method to get stock replica IDs for therapists
+  async getReplicaIdForTherapist(therapistId: string): Promise<string> {
+    try {
+      // First try to get actual stock replicas
+      const stockReplicas = await this.getStockReplicas();
+      
+      if (stockReplicas.length === 0) {
+        console.warn('⚠️ No stock replicas available, using fallback');
+        return 'r783537ef5'; // Default fallback
       }
-    ];
+
+      // Map therapists to appropriate stock replicas based on personality
+      const therapistReplicaMap = {
+        'dr-reality': 0, // Professional Male - serious, direct
+        'prof-optimist': 1, // Professional Female - warm, encouraging  
+        'dr-sarcasm': 2, // Casual Male - witty, relaxed
+        'sage-wisdom': 4, // Executive Style - wise, experienced
+        'rebel-innovator': 2 // Casual Male - disruptive, energetic
+      };
+
+      const replicaIndex = therapistReplicaMap[therapistId as keyof typeof therapistReplicaMap] || 0;
+      const selectedReplica = stockReplicas[replicaIndex] || stockReplicas[0];
+      
+      console.log(`🎭 Selected replica for ${therapistId}:`, selectedReplica.replica_name, selectedReplica.replica_id);
+      
+      // Validate the selected replica before returning
+      const isValid = await this.validateReplica(selectedReplica.replica_id);
+      if (!isValid) {
+        console.warn(`⚠️ Selected replica ${selectedReplica.replica_id} is not valid, using first available`);
+        const validReplica = stockReplicas.find(r => r.status === 'ready');
+        return validReplica?.replica_id || stockReplicas[0].replica_id;
+      }
+      
+      return selectedReplica.replica_id;
+    } catch (error) {
+      console.error('❌ Error getting replica for therapist:', error);
+      return 'r783537ef5'; // Fallback
+    }
   }
 
+  // Simulation methods for demo purposes
   private async simulateVideoGeneration(request: VideoGenerationRequest): Promise<VideoGenerationResponse> {
-    const videoId = `v${Date.now().toString().slice(-8)}`;
+    const videoId = `demo_${Date.now().toString().slice(-8)}`;
+    
+    console.log('🎭 Simulating video generation for demo...');
     
     return {
       video_id: videoId,
-      video_name: 'Demo Therapy Session',
+      video_name: request.video_name || 'Demo Therapy Session',
       status: 'queued',
       hosted_url: `https://demo-video.tavus.io/video/${videoId}`,
       created_at: new Date().toISOString()
@@ -363,7 +337,8 @@ export class TavusAPI {
 
   private async simulateVideoStatus(videoId: string): Promise<VideoGenerationResponse> {
     // Simulate video generation progress based on time elapsed
-    const timestamp = parseInt(videoId.slice(1));
+    const isDemo = videoId.startsWith('demo_');
+    const timestamp = isDemo ? parseInt(videoId.slice(5)) : parseInt(videoId.slice(1));
     const elapsed = Date.now() - timestamp;
     
     if (elapsed < 15000) { // First 15 seconds
@@ -387,35 +362,21 @@ export class TavusAPI {
     };
   }
 
-  // Helper method to get stock replica IDs for therapists
-  async getReplicaIdForTherapist(therapistId: string): Promise<string> {
-    // First try to get actual stock replicas
-    const stockReplicas = await this.getStockReplicas();
-    
-    if (stockReplicas.length === 0) {
-      console.warn('No stock replicas available, using fallback');
-      return 'r783537ef5'; // Default fallback
+  // Debug method to test API connectivity
+  async testConnection(): Promise<boolean> {
+    if (!this.apiKey) {
+      console.log('🔧 No API key - connection test skipped');
+      return false;
     }
 
-    // Map therapists to appropriate stock replicas based on personality
-    const therapistReplicaMap = {
-      'dr-reality': 0, // Professional Male - serious, direct
-      'prof-optimist': 1, // Professional Female - warm, encouraging  
-      'dr-sarcasm': 2, // Casual Male - witty, relaxed
-      'sage-wisdom': 4, // Executive Style - wise, experienced
-      'rebel-innovator': 2 // Casual Male - disruptive, energetic
-    };
-
-    const replicaIndex = therapistReplicaMap[therapistId as keyof typeof therapistReplicaMap] || 0;
-    const selectedReplica = stockReplicas[replicaIndex] || stockReplicas[0];
-    
-    console.log(`🎭 Selected replica for ${therapistId}:`, selectedReplica.name, selectedReplica.replica_id);
-    return selectedReplica.replica_id;
-  }
-
-  // Legacy method for backward compatibility
-  getDefaultReplicaId(therapistId: string): string {
-    console.warn('getDefaultReplicaId is deprecated, use getReplicaIdForTherapist instead');
-    return 'r783537ef5'; // Default fallback
+    try {
+      console.log('🔧 Testing Tavus API connection...');
+      await this.makeRequest('/replicas?limit=1');
+      console.log('✅ Tavus API connection successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Tavus API connection failed:', error);
+      return false;
+    }
   }
 }
