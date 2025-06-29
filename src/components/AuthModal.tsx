@@ -20,6 +20,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
   if (!isOpen) return null;
 
+  const getErrorMessage = (error: any): string => {
+    const message = error?.message || '';
+    
+    // Handle specific authentication errors with user-friendly messages
+    if (message.includes('Invalid login credentials') || message.includes('invalid_credentials')) {
+      return mode === 'signin' 
+        ? 'Invalid email or password. Please check your credentials and try again.'
+        : 'Unable to create account. Please try again.';
+    }
+    
+    if (message.includes('User already registered')) {
+      return 'An account with this email already exists. Please sign in instead.';
+    }
+    
+    if (message.includes('Email not confirmed')) {
+      return 'Please check your email and click the confirmation link before signing in.';
+    }
+    
+    if (message.includes('Password should be at least')) {
+      return 'Password must be at least 6 characters long.';
+    }
+    
+    if (message.includes('Invalid email')) {
+      return 'Please enter a valid email address.';
+    }
+    
+    // Return the original message for other errors, or a generic message
+    return message || 'An unexpected error occurred. Please try again.';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -33,7 +63,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
       }
       onClose();
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -47,7 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
       await signInWithGoogle();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -89,6 +119,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
             <p className="text-red-800 text-sm">{error}</p>
+            {error.includes('Invalid email or password') && mode === 'signin' && (
+              <p className="text-red-600 text-xs mt-2">
+                Don't have an account?{' '}
+                <button
+                  onClick={switchMode}
+                  className="underline hover:no-underline font-medium"
+                >
+                  Sign up here
+                </button>
+              </p>
+            )}
           </div>
         )}
 
