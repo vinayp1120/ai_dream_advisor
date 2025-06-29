@@ -7,6 +7,8 @@ import { TherapySession } from './components/TherapySession';
 import { Leaderboard } from './components/Leaderboard';
 import { NFTMinting } from './components/NFTMinting';
 import { ProfileSettings } from './components/ProfileSettings';
+import { IdeasHistory } from './components/IdeasHistory';
+import { TherapistsInfo } from './components/TherapistsInfo';
 import { useAuth } from './hooks/useAuth';
 
 interface Therapist {
@@ -19,7 +21,7 @@ interface Therapist {
   specialty: string;
 }
 
-type AppState = 'home' | 'submission' | 'therapist' | 'session' | 'nft' | 'profile';
+type AppState = 'home' | 'submission' | 'therapist' | 'session' | 'nft' | 'profile' | 'ideas' | 'therapists-info';
 
 function App() {
   const [currentState, setCurrentState] = useState<AppState>('home');
@@ -59,7 +61,7 @@ function App() {
       setCurrentState('therapist');
     } else if (currentState === 'nft') {
       setCurrentState('session');
-    } else if (currentState === 'profile') {
+    } else if (currentState === 'profile' || currentState === 'ideas' || currentState === 'therapists-info') {
       setCurrentState('home');
     }
   };
@@ -75,6 +77,14 @@ function App() {
         if (isAuthenticated) {
           setCurrentState('profile');
         }
+        break;
+      case 'ideas':
+        if (isAuthenticated) {
+          setCurrentState('ideas');
+        }
+        break;
+      case 'therapists-info':
+        setCurrentState('therapists-info');
         break;
       case 'home':
         setCurrentState('home');
@@ -143,6 +153,14 @@ function App() {
       case 'profile':
         return (
           <ProfileSettings onBack={handleBack} />
+        );
+      case 'ideas':
+        return (
+          <IdeasHistory onBack={handleBack} />
+        );
+      case 'therapists-info':
+        return (
+          <TherapistsInfo onBack={handleBack} />
         );
       default:
         return null;

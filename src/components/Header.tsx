@@ -36,6 +36,10 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleLogoClick = () => {
+    onNavigate?.('home');
+  };
+
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -48,7 +52,10 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-2">
+            <button 
+              onClick={handleLogoClick}
+              className="flex items-center space-x-2 hover:scale-105 transition-transform"
+            >
               <div className="relative">
                 <Brain className="w-8 h-8 text-blue-600" />
                 <Sparkles className="w-4 h-4 text-orange-500 absolute -top-1 -right-1" />
@@ -56,7 +63,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 DreamAdvisor
               </h1>
-            </div>
+            </button>
             
             <nav className="hidden md:flex items-center space-x-8">
               <button 
@@ -66,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
                 Features
               </button>
               <button 
-                onClick={() => scrollToSection('therapists')}
+                onClick={() => onNavigate?.('therapists-info')}
                 className="text-gray-700 hover:text-blue-600 transition-colors"
               >
                 Therapists
@@ -77,6 +84,15 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
               >
                 Leaderboard
               </button>
+              
+              {isAuthenticated && (
+                <button 
+                  onClick={() => onNavigate?.('ideas')}
+                  className="text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  Ideas
+                </button>
+              )}
               
               {isAuthenticated ? (
                 <div className="relative">

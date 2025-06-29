@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Mic, Play, Star, Zap } from 'lucide-react';
+import { MessageSquare, Mic, Play, Star, Zap, Brain, Video, Award, Users, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { AuthModal } from './AuthModal';
 
@@ -85,29 +85,100 @@ export const Hero: React.FC<HeroProps> = ({ onStartJourney }) => {
             </button>
           </div>
 
-          <div id="features" className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
-                <MessageSquare className="w-6 h-6 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Submit Your Idea</h3>
-              <p className="text-gray-600">Text or voice - we accept all forms of entrepreneurial madness</p>
-            </div>
+          {/* Enhanced Features Section */}
+          <div id="features" className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">
+              Why Choose
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> DreamAdvisor?</span>
+            </h2>
             
-            <div id="therapists" className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
-                <Star className="w-6 h-6 text-purple-600" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                  <MessageSquare className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Multi-Modal Submission</h3>
+                <p className="text-gray-600">Submit ideas via text or voice - we accept all forms of entrepreneurial madness and creativity</p>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Choose Your Therapist</h3>
-              <p className="text-gray-600">Pick from our roster of brutally honest AI personalities</p>
+              
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                  <Brain className="w-6 h-6 text-purple-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Personality Matching</h3>
+                <p className="text-gray-600">Choose from 5 unique AI therapists, each with distinct personalities and expertise areas</p>
+              </div>
+              
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                  <Video className="w-6 h-6 text-orange-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">AI-Generated Video Sessions</h3>
+                <p className="text-gray-600">Receive personalized video therapy sessions with realistic AI avatars and voice narration</p>
+              </div>
+
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                  <Award className="w-6 h-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Blockchain Certificates</h3>
+                <p className="text-gray-600">Mint your high-scoring ideas as NFT certificates on Algorand blockchain for proof of innovation</p>
+              </div>
+
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                  <Users className="w-6 h-6 text-yellow-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Community Leaderboard</h3>
+                <p className="text-gray-600">Compete with fellow entrepreneurs and showcase your genius ideas on our public leaderboard</p>
+              </div>
+
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                  <Sparkles className="w-6 h-6 text-pink-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Idea History Tracking</h3>
+                <p className="text-gray-600">Track your entrepreneurial journey with detailed history of all your ideas and therapy sessions</p>
+              </div>
             </div>
-            
-            <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 mx-auto">
-                <Play className="w-6 h-6 text-orange-600" />
+
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-8 border border-blue-200">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">🤖 Advanced AI Technology</h3>
+                <ul className="space-y-2 text-gray-700">
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span>OpenRouter LLM for intelligent script generation</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span>Tavus AI for realistic video avatar creation</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span>ElevenLabs for natural voice synthesis</span>
+                  </li>
+                </ul>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Get Video Feedback</h3>
-              <p className="text-gray-600">Receive personalized video therapy sessions for your startup</p>
+
+              <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-8 border border-orange-200">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">🚀 Startup-Focused Features</h3>
+                <ul className="space-y-2 text-gray-700">
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <span>Market validation and business model analysis</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <span>Scoring system based on startup viability</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <span>Actionable insights and next-step recommendations</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
