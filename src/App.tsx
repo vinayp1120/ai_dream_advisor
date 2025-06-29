@@ -9,6 +9,7 @@ import { NFTMinting } from './components/NFTMinting';
 import { ProfileSettings } from './components/ProfileSettings';
 import { IdeasHistory } from './components/IdeasHistory';
 import { TherapistsInfo } from './components/TherapistsInfo';
+import { SecurityStatus } from './components/SecurityStatus';
 import { useAuth } from './hooks/useAuth';
 
 interface Therapist {
@@ -182,6 +183,7 @@ function App() {
     <div className="min-h-screen bg-white">
       {currentState === 'home' && <Header onNavigate={handleNavigate} />}
       {renderCurrentState()}
+      <SecurityStatus />
     </div>
   );
 }

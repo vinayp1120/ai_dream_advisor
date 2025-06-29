@@ -23,7 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables - CRITICAL: Never commit API keys
+# Environment variables - CRITICAL SECURITY
 .env
 .env.local
 .env.development.local
@@ -33,5 +33,23 @@ dist-ssr
 # API Keys and Secrets
 *.key
 *.pem
-secrets/
-config/secrets.json
+secrets.json
+config.json
+
+# Database
+*.db
+*.sqlite
+
+# OS generated files
+Thumbs.db
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
