@@ -127,22 +127,24 @@ export class ElevenLabsAPI {
     return mockIdeas[Math.floor(Math.random() * mockIdeas.length)];
   }
 
-  async generateSpeech(text: string, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<Blob> {
+  async generateSpeech(text: string, voiceId: string = 'JBFqnCBsd6RMkjVDRZzb'): Promise<Blob> {
     if (!this.apiKey) {
       throw new Error('ElevenLabs API key not configured');
     }
 
     try {
-      const response = await fetch(`${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`, {
+      // Use the exact endpoint format you provided
+      const url = `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
-          'xi-api-key': this.apiKey
+          'xi-api-key': this.apiKey,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          text,
-          model_id: 'eleven_monolingual_v1',
+          text: text,
+          model_id: 'eleven_multilingual_v2',
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.5,
@@ -155,13 +157,27 @@ export class ElevenLabsAPI {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('ElevenLabs API error:', response.status, errorText);
-        throw new Error(`ElevenLabs API error: ${response.status}`);
+        
+        // Handle specific quota exceeded error
+        if (response.status === 401 && errorText.includes('quota_exceeded')) {
+          throw new Error('ElevenLabs quota exceeded. Please check your subscription or try again later.');
+        }
+        
+        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
-      return await response.blob();
+      const audioBlob = await response.blob();
+      
+      // Verify we got audio data
+      if (audioBlob.size === 0) {
+        throw new Error('Received empty audio response');
+      }
+      
+      return audioBlob;
+      
     } catch (error) {
       console.error('Speech generation error:', error);
-      throw new Error('Failed to generate speech');
+      throw new Error(`Failed to generate speech: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

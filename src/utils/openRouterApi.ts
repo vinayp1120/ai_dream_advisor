@@ -37,7 +37,7 @@ export class OpenRouterAPI {
   private apiKey: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || OPENROUTER_API_KEY || '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';
+    this.apiKey = apiKey || OPENROUTER_API_KEY;
     if (!this.apiKey) {
       console.warn('OpenRouter API key not found. Using fallback script generation.');
     }
