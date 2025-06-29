@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX } from 'lucide-react';
 import { TavusAPI, VideoGenerationResponse } from '../utils/tavusApi';
 import { ElevenLabsAPI } from '../utils/elevenLabsApi';
+import { OpenRouterAPI } from '../utils/openRouterApi';
 
 interface Therapist {
   id: string;
@@ -32,11 +33,13 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [audioError, setAudioError] = useState<string | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [generationStage, setGenerationStage] = useState('script');
+  const [generatedScript, setGeneratedScript] = useState<string>('');
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const tavusApiRef = useRef<TavusAPI>(new TavusAPI());
   const elevenLabsRef = useRef<ElevenLabsAPI>(new ElevenLabsAPI());
+  const openRouterApiRef = useRef<OpenRouterAPI>(new OpenRouterAPI());
 
   // Generate therapy script and video
   useEffect(() => {
@@ -66,8 +69,15 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setVideoError(null);
       setGenerationStage('script');
       
-      // Generate therapy script based on therapist personality
-      const script = generateTherapyScript(idea, therapist);
+      // Generate therapy script using OpenRouter LLM
+      console.log('Generating therapy script with OpenRouter...');
+      const script = await openRouterApiRef.current.generateTherapyScript(
+        idea, 
+        therapist.personality, 
+        therapist.name
+      );
+      setGeneratedScript(script);
+      console.log('Generated script:', script);
       
       // Get replica UUID for the therapist
       const replicaUuid = tavusApiRef.current.getDefaultReplicaUuid(therapist.id);
@@ -82,6 +92,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       };
       
       try {
+        console.log('Generating video with Tavus...');
         const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
         setVideoData(videoResponse);
         
@@ -158,8 +169,10 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setAudioError(null);
       
       const voiceId = getTherapistVoiceId(therapist.id);
+      console.log('Generating audio with ElevenLabs...');
       const audioBlob = await elevenLabsRef.current.generateSpeech(script, voiceId);
       setAudioBlob(audioBlob);
+      console.log('Audio generated successfully');
     } catch (error) {
       console.error('Error generating audio:', error);
       setAudioError('Audio generation unavailable - API key not configured');
@@ -167,78 +180,6 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     } finally {
       setIsLoadingAudio(false);
     }
-  };
-
-  const generateTherapyScript = (idea: string, therapist: Therapist): string => {
-    const scripts = {
-      'dr-reality': `
-        Alright, let's talk about this idea of yours: "${idea}". 
-        
-        Look, I'm not here to crush your dreams, but someone needs to give you the reality check you deserve. 
-        
-        First off, the market validation is questionable at best. Have you actually talked to potential customers, or are you just assuming they want this? 
-        
-        The business model needs serious work. How exactly are you planning to make money? And please don't say "we'll figure it out later."
-        
-        That said, there's a kernel of something here. The core concept isn't terrible, but the execution needs to be completely rethought.
-        
-        My advice? Start small, validate demand, and for the love of all that's holy, talk to your customers before you build anything.
-      `,
-      'prof-optimist': `
-        Oh my goodness, "${idea}" - what a fascinating concept! 
-        
-        I can see the passion and creativity behind this idea, and that's exactly what the world needs more of.
-        
-        You know what I love about this? It's addressing a real gap in the market. People are hungry for solutions like this.
-        
-        The monetization opportunities are endless! You could start with a freemium model, add premium features, maybe even licensing deals.
-        
-        Sure, there will be challenges, but every great startup faces obstacles. That's what makes the journey so rewarding!
-        
-        My advice? Start with an MVP, get user feedback, and iterate quickly. You've got something special here - I can feel it!
-      `,
-      'dr-sarcasm': `
-        Well, well, well... "${idea}". 
-        
-        I have to admit, it's... creative. And by creative, I mean I've never seen anything quite like it. Whether that's good or bad remains to be seen.
-        
-        The complexity of execution is only slightly terrifying. But hey, if you enjoy impossible challenges, this is perfect for you.
-        
-        Your target market might exist somewhere in an alternate dimension, but stranger things have succeeded in Silicon Valley.
-        
-        Look, I'm not saying it's impossible. I'm just saying you might want to simplify it until your grandmother can explain it to her cat. Then simplify it more.
-        
-        But who knows? Maybe you'll prove me wrong. Wouldn't be the first time someone succeeded despite my skepticism.
-      `,
-      'sage-wisdom': `
-        Ah, "${idea}". Let me share some wisdom from my years in the startup trenches.
-        
-        This reminds me of several successful companies I've seen, but with a unique twist that could be your competitive advantage.
-        
-        The key to success here will be execution and timing. The market is ready for disruption in this space.
-        
-        Focus on building a strong foundation first. Get your unit economics right, build a defensible moat, and scale methodically.
-        
-        Remember, every unicorn started as someone's crazy idea. The difference is in the execution and persistence.
-        
-        My advice? Build, measure, learn. Repeat until you find product-market fit. Then scale like your life depends on it.
-      `,
-      'rebel-innovator': `
-        "${idea}" - now THIS is what I'm talking about! 
-        
-        You're not just thinking outside the box, you're setting the box on fire and dancing around the flames. I love it!
-        
-        This has the potential to completely disrupt the status quo. The incumbents won't see this coming.
-        
-        The beauty of this idea is that it challenges fundamental assumptions about how things should work.
-        
-        Don't let anyone tell you to play it safe. The biggest wins come from the biggest risks.
-        
-        My advice? Move fast and break things. Build something so revolutionary that people have no choice but to pay attention.
-      `
-    };
-
-    return scripts[therapist.id as keyof typeof scripts] || scripts['dr-reality'];
   };
 
   const getTherapistVoiceId = (therapistId: string): string => {
@@ -282,65 +223,46 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   };
 
   const getTherapistFeedback = () => {
-    const feedbacks = {
-      'dr-reality': {
-        verdict: 'Needs Serious Work',
-        score: 3.2,
-        insights: [
-          'Market validation is your biggest challenge here',
-          'The business model needs significant refinement',
-          'Competition analysis reveals major gaps in your approach',
-          'However, the core concept has potential if executed properly'
-        ],
-        advice: 'Focus on validating demand before building anything. Talk to 100 potential customers first.'
-      },
-      'prof-optimist': {
-        verdict: 'Promising Potential!',
-        score: 7.8,
-        insights: [
-          'Your passion for this idea really shines through',
-          'There are multiple monetization opportunities here',
-          'The target market is definitely underserved',
-          'With the right execution, this could be revolutionary'
-        ],
-        advice: 'Start small, validate with a MVP, then scale based on user feedback. You\'ve got this!'
-      },
-      'dr-sarcasm': {
-        verdict: 'Creatively Chaotic',
-        score: 5.5,
-        insights: [
-          'Well, at least it\'s... original. I\'ll give you that.',
-          'The execution complexity is only slightly terrifying',
-          'Your target market might exist... in an alternate universe',
-          'But hey, stranger things have succeeded in Silicon Valley'
-        ],
-        advice: 'Simplify it until your grandmother can explain it to her cat. Then simplify it more.'
-      },
-      'sage-wisdom': {
-        verdict: 'Strategically Sound',
-        score: 8.2,
-        insights: [
-          'This shows deep understanding of market dynamics',
-          'The timing appears to be perfect for this type of solution',
-          'Your approach demonstrates mature strategic thinking',
-          'The scalability potential is impressive'
-        ],
-        advice: 'Focus on building strong foundations and defensible moats. Execute methodically.'
-      },
-      'rebel-innovator': {
-        verdict: 'Disruptively Brilliant',
-        score: 9.1,
-        insights: [
-          'This completely challenges conventional thinking',
-          'The potential for market disruption is enormous',
-          'You\'re solving problems people didn\'t know they had',
-          'This could create an entirely new category'
-        ],
-        advice: 'Move fast and break things. Build something so revolutionary that people can\'t ignore it.'
-      }
+    // Use the generated script for analysis, or fall back to default scoring
+    const script = generatedScript || '';
+    
+    // Simple scoring based on script content and therapist personality
+    let score = 5.0;
+    if (script.includes('potential') || script.includes('opportunity')) score += 1.5;
+    if (script.includes('challenge') || script.includes('problem')) score += 0.5;
+    if (script.includes('brilliant') || script.includes('genius')) score += 2.0;
+    if (script.includes('fail') || script.includes('terrible')) score -= 1.0;
+    
+    // Adjust based on therapist personality
+    switch (therapist.personality) {
+      case 'Encouraging':
+        score += 1.5;
+        break;
+      case 'Brutally Honest':
+        score -= 0.5;
+        break;
+      case 'Disruptive Thinker':
+        score += 1.0;
+        break;
+    }
+    
+    score = Math.max(1.0, Math.min(10.0, score)); // Clamp between 1-10
+    
+    const verdict = score >= 8 ? 'Genius Level!' : 
+                   score >= 6 ? 'Promising Potential' : 
+                   score >= 4 ? 'Needs Work' : 'Back to Drawing Board';
+    
+    return {
+      verdict,
+      score: parseFloat(score.toFixed(1)),
+      insights: [
+        'Analysis based on AI-generated therapy session',
+        'Personalized feedback from your selected therapist',
+        'Comprehensive evaluation of market potential',
+        'Strategic recommendations for next steps'
+      ],
+      advice: 'Review the detailed feedback from your AI therapist and take action on the specific recommendations provided.'
     };
-
-    return feedbacks[therapist.id as keyof typeof feedbacks] || feedbacks['dr-reality'];
   };
 
   const feedback = getTherapistFeedback();
@@ -348,7 +270,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const getStageMessage = () => {
     switch (generationStage) {
       case 'script':
-        return 'Creating personalized therapy script...';
+        return 'Creating personalized therapy script with AI...';
       case 'video':
         return 'Generating AI video with Tavus...';
       case 'audio':
@@ -376,19 +298,19 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             <div className="flex items-center justify-center space-x-2">
               <Loader className={`w-4 h-4 ${generationStage === 'script' ? 'animate-spin' : ''}`} />
               <span className={generationStage === 'script' ? 'text-blue-600 font-medium' : ''}>
-                Creating therapy script...
+                Generating AI therapy script...
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
               <Loader className={`w-4 h-4 ${generationStage === 'video' ? 'animate-spin' : ''}`} />
               <span className={generationStage === 'video' ? 'text-blue-600 font-medium' : ''}>
-                Generating AI video...
+                Creating AI video...
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
               <Loader className={`w-4 h-4 ${generationStage === 'audio' ? 'animate-spin' : ''}`} />
               <span className={generationStage === 'audio' ? 'text-blue-600 font-medium' : ''}>
-                Processing voice...
+                Processing voice narration...
               </span>
             </div>
           </div>
@@ -529,6 +451,16 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
               </div>
             </div>
           </div>
+
+          {/* Generated Script Display */}
+          {generatedScript && (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-6 mb-6">
+              <h3 className="text-lg font-bold text-purple-900 mb-3">AI-Generated Therapy Script</h3>
+              <div className="bg-white rounded-xl p-4 border border-purple-200">
+                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{generatedScript}</p>
+              </div>
+            </div>
+          )}
 
           {/* Analysis Results */}
           {showResults && (
