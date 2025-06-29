@@ -69,14 +69,14 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       // Generate therapy script based on therapist personality
       const script = generateTherapyScript(idea, therapist);
       
-      // Get avatar ID for the therapist
-      const avatarId = tavusApiRef.current.getDefaultAvatarId(therapist.id);
+      // Get replica UUID for the therapist
+      const replicaUuid = tavusApiRef.current.getDefaultReplicaUuid(therapist.id);
       
       setGenerationStage('video');
       
       // Generate video with Tavus
       const videoRequest = {
-        avatar_id: avatarId,
+        replica_uuid: replicaUuid,
         script: script,
         callback_url: undefined
       };

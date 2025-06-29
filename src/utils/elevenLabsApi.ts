@@ -19,7 +19,7 @@ export class ElevenLabsAPI {
   private apiKey: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || ELEVENLABS_API_KEY || 'sk_001e25a4d95c603c6807cbd7b2cbbc40f045a77e1b98bb69';
+    this.apiKey = apiKey || ELEVENLABS_API_KEY;
     if (!this.apiKey) {
       console.warn('ElevenLabs API key not found. Voice features will be disabled.');
     }

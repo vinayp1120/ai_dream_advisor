@@ -2,7 +2,7 @@ const TAVUS_API_KEY = import.meta.env.VITE_TAVUS_API_KEY;
 const TAVUS_API_URL = 'https://tavusapi.com/v2';
 
 export interface TavusReplica {
-  avatar_id: number;
+  replica_id: string;
   status: 'training' | 'completed' | 'error';
   name?: string;
   created_at?: string;
@@ -15,7 +15,7 @@ export interface CreateAvatarRequest {
 }
 
 export interface VideoGenerationRequest {
-  avatar_id: number;
+  replica_uuid: string;
   script: string;
   background_url?: string;
   callback_url?: string;
@@ -33,7 +33,7 @@ export class TavusAPI {
   private apiKey: string;
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || TAVUS_API_KEY || 'f477b646478d4f8ab1d653bb91c38fb9';
+    this.apiKey = apiKey || TAVUS_API_KEY;
     if (!this.apiKey) {
       console.warn('Tavus API key not found. Video generation will be simulated.');
     }
@@ -62,9 +62,9 @@ export class TavusAPI {
 
       const result = await response.json();
       return {
-        avatar_id: result.avatar_id,
+        replica_id: result.replica_id,
         status: 'training',
-        name: `Avatar ${result.avatar_id}`,
+        name: `Avatar ${result.replica_id}`,
         created_at: new Date().toISOString()
       };
     } catch (error) {
@@ -73,13 +73,13 @@ export class TavusAPI {
     }
   }
 
-  async getAvatar(avatarId: number): Promise<TavusReplica> {
+  async getAvatar(replicaId: string): Promise<TavusReplica> {
     if (!this.apiKey) {
-      return this.simulateAvatarStatus(avatarId);
+      return this.simulateAvatarStatus(replicaId);
     }
 
     try {
-      const response = await fetch(`${TAVUS_API_URL}/avatars/${avatarId}`, {
+      const response = await fetch(`${TAVUS_API_URL}/avatars/${replicaId}`, {
         headers: {
           'x-api-key': this.apiKey
         }
@@ -91,7 +91,7 @@ export class TavusAPI {
 
       const result = await response.json();
       return {
-        avatar_id: result.id,
+        replica_id: result.id,
         status: result.status === 'completed' ? 'completed' : 'training',
         name: result.name,
         created_at: result.created_at,
@@ -99,7 +99,7 @@ export class TavusAPI {
       };
     } catch (error) {
       console.error('Error fetching avatar:', error);
-      return this.simulateAvatarStatus(avatarId);
+      return this.simulateAvatarStatus(replicaId);
     }
   }
 
@@ -121,7 +121,7 @@ export class TavusAPI {
 
       const result = await response.json();
       return result.map((avatar: any) => ({
-        avatar_id: avatar.id,
+        replica_id: avatar.id,
         status: avatar.status === 'completed' ? 'completed' : 'training',
         name: avatar.name,
         created_at: avatar.created_at,
@@ -199,22 +199,22 @@ export class TavusAPI {
 
   // Simulation methods for demo purposes
   private async simulateAvatarCreation(request: CreateAvatarRequest): Promise<TavusReplica> {
-    const avatarId = Math.floor(Math.random() * 10000) + 1000;
+    const replicaId = `replica_${Math.floor(Math.random() * 10000) + 1000}`;
     
     return {
-      avatar_id: avatarId,
+      replica_id: replicaId,
       status: 'training',
-      name: `Demo Avatar ${avatarId}`,
+      name: `Demo Avatar ${replicaId}`,
       created_at: new Date().toISOString()
     };
   }
 
-  private async simulateAvatarStatus(avatarId: number): Promise<TavusReplica> {
+  private async simulateAvatarStatus(replicaId: string): Promise<TavusReplica> {
     // Simulate training completion after some time
     return {
-      avatar_id: avatarId,
+      replica_id: replicaId,
       status: 'completed',
-      name: `Demo Avatar ${avatarId}`,
+      name: `Demo Avatar ${replicaId}`,
       created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
       updated_at: new Date().toISOString()
     };
@@ -223,19 +223,19 @@ export class TavusAPI {
   private async simulateAvatarList(): Promise<TavusReplica[]> {
     return [
       {
-        avatar_id: 1001,
+        replica_id: 'replica_1001',
         status: 'completed',
         name: 'Dr. Reality Check Avatar',
         created_at: new Date(Date.now() - 86400000).toISOString()
       },
       {
-        avatar_id: 1002,
+        replica_id: 'replica_1002',
         status: 'completed',
         name: 'Prof. Optimist Avatar',
         created_at: new Date(Date.now() - 172800000).toISOString()
       },
       {
-        avatar_id: 1003,
+        replica_id: 'replica_1003',
         status: 'training',
         name: 'Dr. Sarcasm Avatar',
         created_at: new Date(Date.now() - 3600000).toISOString()
@@ -278,16 +278,17 @@ export class TavusAPI {
     };
   }
 
-  // Helper method to get default avatar IDs for therapists
-  getDefaultAvatarId(therapistId: string): number {
-    const avatarMap = {
-      'dr-reality': 1001,
-      'prof-optimist': 1002, 
-      'dr-sarcasm': 1003,
-      'sage-wisdom': 1004,
-      'rebel-innovator': 1005
+  // Helper method to get default replica UUIDs for therapists
+  // NOTE: Replace these placeholder UUIDs with actual replica UUIDs from your Tavus account
+  getDefaultReplicaUuid(therapistId: string): string {
+    const replicaMap = {
+      'dr-reality': 'your_dr_reality_replica_uuid_here',
+      'prof-optimist': 'your_prof_optimist_replica_uuid_here', 
+      'dr-sarcasm': 'your_dr_sarcasm_replica_uuid_here',
+      'sage-wisdom': 'your_sage_wisdom_replica_uuid_here',
+      'rebel-innovator': 'your_rebel_innovator_replica_uuid_here'
     };
 
-    return avatarMap[therapistId as keyof typeof avatarMap] || 1001;
+    return replicaMap[therapistId as keyof typeof replicaMap] || 'your_default_replica_uuid_here';
   }
 }
