@@ -6,6 +6,8 @@ import { TherapistSelection } from './components/TherapistSelection';
 import { TherapySession } from './components/TherapySession';
 import { Leaderboard } from './components/Leaderboard';
 import { NFTMinting } from './components/NFTMinting';
+import { ProfileSettings } from './components/ProfileSettings';
+import { useAuth } from './hooks/useAuth';
 
 interface Therapist {
   id: string;
@@ -17,15 +19,21 @@ interface Therapist {
   specialty: string;
 }
 
-type AppState = 'home' | 'submission' | 'therapist' | 'session' | 'nft';
+type AppState = 'home' | 'submission' | 'therapist' | 'session' | 'nft' | 'profile';
 
 function App() {
   const [currentState, setCurrentState] = useState<AppState>('home');
   const [submittedIdea, setSubmittedIdea] = useState('');
   const [selectedTherapist, setSelectedTherapist] = useState<Therapist | null>(null);
+  const { isAuthenticated, loading } = useAuth();
 
   const handleStartJourney = () => {
-    setCurrentState('submission');
+    if (isAuthenticated) {
+      setCurrentState('submission');
+    } else {
+      // Auth modal will be handled by Hero component
+      console.log('User needs to authenticate first');
+    }
   };
 
   const handleIdeaSubmit = (idea: string, method: 'text' | 'voice') => {
@@ -51,6 +59,44 @@ function App() {
       setCurrentState('therapist');
     } else if (currentState === 'nft') {
       setCurrentState('session');
+    } else if (currentState === 'profile') {
+      setCurrentState('home');
+    }
+  };
+
+  const handleNavigate = (section: string) => {
+    switch (section) {
+      case 'submission':
+        if (isAuthenticated) {
+          setCurrentState('submission');
+        }
+        break;
+      case 'profile':
+        if (isAuthenticated) {
+          setCurrentState('profile');
+        }
+        break;
+      case 'home':
+        setCurrentState('home');
+        break;
+      default:
+        // For other sections, scroll to them on home page
+        if (currentState !== 'home') {
+          setCurrentState('home');
+          // Wait for state change then scroll
+          setTimeout(() => {
+            const element = document.getElementById(section);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 100);
+        } else {
+          const element = document.getElementById(section);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+        break;
     }
   };
 
@@ -94,14 +140,29 @@ function App() {
             onBack={handleBack}
           />
         );
+      case 'profile':
+        return (
+          <ProfileSettings onBack={handleBack} />
+        );
       default:
         return null;
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading DreamAdvisor...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
-      {currentState === 'home' && <Header />}
+      {currentState === 'home' && <Header onNavigate={handleNavigate} />}
       {renderCurrentState()}
     </div>
   );
