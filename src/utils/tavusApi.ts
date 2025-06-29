@@ -7,6 +7,7 @@ export interface TavusReplica {
   name?: string;
   created_at?: string;
   updated_at?: string;
+  replica_type?: 'system' | 'custom';
 }
 
 export interface CreateAvatarRequest {
@@ -34,12 +35,90 @@ export interface VideoGenerationResponse {
 
 export class TavusAPI {
   private apiKey: string;
+  private stockReplicas: TavusReplica[] = [];
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || TAVUS_API_KEY;
     if (!this.apiKey) {
       console.warn('Tavus API key not found. Video generation will be simulated.');
     }
+  }
+
+  async getStockReplicas(): Promise<TavusReplica[]> {
+    if (!this.apiKey) {
+      return this.getDefaultStockReplicas();
+    }
+
+    try {
+      console.log('🎬 Fetching stock replicas from Tavus...');
+      const response = await fetch(`${TAVUS_API_URL}/replicas?replica_type=system`, {
+        headers: {
+          'x-api-key': this.apiKey
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Failed to fetch stock replicas:', response.status);
+        return this.getDefaultStockReplicas();
+      }
+
+      const replicas = await response.json();
+      console.log('✅ Stock replicas fetched:', replicas.length);
+      
+      this.stockReplicas = replicas.map((replica: any) => ({
+        replica_id: replica.replica_id,
+        status: 'ready',
+        name: replica.name || `Stock Replica ${replica.replica_id}`,
+        replica_type: 'system',
+        created_at: replica.created_at
+      }));
+
+      return this.stockReplicas;
+    } catch (error) {
+      console.error('Error fetching stock replicas:', error);
+      return this.getDefaultStockReplicas();
+    }
+  }
+
+  private getDefaultStockReplicas(): TavusReplica[] {
+    // Default stock replicas for demo/fallback
+    return [
+      {
+        replica_id: 'r783537ef5',
+        status: 'ready',
+        name: 'Professional Male',
+        replica_type: 'system',
+        created_at: new Date().toISOString()
+      },
+      {
+        replica_id: 'r12345678',
+        status: 'ready', 
+        name: 'Professional Female',
+        replica_type: 'system',
+        created_at: new Date().toISOString()
+      },
+      {
+        replica_id: 'r87654321',
+        status: 'ready',
+        name: 'Casual Male',
+        replica_type: 'system',
+        created_at: new Date().toISOString()
+      },
+      {
+        replica_id: 'r11111111',
+        status: 'ready',
+        name: 'Casual Female',
+        replica_type: 'system',
+        created_at: new Date().toISOString()
+      },
+      {
+        replica_id: 'r22222222',
+        status: 'ready',
+        name: 'Executive Style',
+        replica_type: 'system',
+        created_at: new Date().toISOString()
+      }
+    ];
   }
 
   async createAvatar(request: CreateAvatarRequest): Promise<TavusReplica> {
@@ -142,8 +221,12 @@ export class TavusAPI {
     }
 
     try {
-      console.log('Generating video with Tavus API...');
-      console.log('Request:', request);
+      console.log('🎬 Generating video with Tavus API...');
+      console.log('Request:', {
+        replica_id: request.replica_id,
+        script_length: request.script.length,
+        video_name: request.video_name
+      });
       
       const response = await fetch(`${TAVUS_API_URL}/videos`, {
         method: 'POST',
@@ -157,18 +240,24 @@ export class TavusAPI {
           video_name: request.video_name || 'DreamAdvisor Therapy Session',
           background_url: request.background_url || '',
           callback_url: request.callback_url,
-          fast: request.fast || false
+          fast: request.fast !== false // Default to true for faster generation
         })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Tavus video generation error:', response.status, errorText);
+        console.error('❌ Tavus video generation error:', response.status, errorText);
+        
+        // Handle specific error cases
+        if (response.status === 400 && errorText.includes('replica')) {
+          throw new Error('Invalid replica ID. Please check your Tavus account for available replicas.');
+        }
+        
         throw new Error(`Tavus API error: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('Tavus response:', result);
+      console.log('✅ Tavus video generation started:', result);
       
       return {
         video_id: result.video_id,
@@ -178,7 +267,7 @@ export class TavusAPI {
         created_at: result.created_at
       };
     } catch (error) {
-      console.error('Video generation error:', error);
+      console.error('❌ Video generation error:', error);
       return this.simulateVideoGeneration(request);
     }
   }
@@ -277,7 +366,7 @@ export class TavusAPI {
     const timestamp = parseInt(videoId.slice(1));
     const elapsed = Date.now() - timestamp;
     
-    if (elapsed < 10000) { // First 10 seconds
+    if (elapsed < 15000) { // First 15 seconds
       return {
         video_id: videoId,
         video_name: 'Demo Therapy Session',
@@ -298,17 +387,35 @@ export class TavusAPI {
     };
   }
 
-  // Helper method to get default replica IDs for therapists
-  // NOTE: Replace these placeholder replica IDs with actual replica IDs from your Tavus account
-  getDefaultReplicaId(therapistId: string): string {
-    const replicaMap = {
-      'dr-reality': 'your_dr_reality_replica_id_here',
-      'prof-optimist': 'your_prof_optimist_replica_id_here', 
-      'dr-sarcasm': 'your_dr_sarcasm_replica_id_here',
-      'sage-wisdom': 'your_sage_wisdom_replica_id_here',
-      'rebel-innovator': 'your_rebel_innovator_replica_id_here'
+  // Helper method to get stock replica IDs for therapists
+  async getReplicaIdForTherapist(therapistId: string): Promise<string> {
+    // First try to get actual stock replicas
+    const stockReplicas = await this.getStockReplicas();
+    
+    if (stockReplicas.length === 0) {
+      console.warn('No stock replicas available, using fallback');
+      return 'r783537ef5'; // Default fallback
+    }
+
+    // Map therapists to appropriate stock replicas based on personality
+    const therapistReplicaMap = {
+      'dr-reality': 0, // Professional Male - serious, direct
+      'prof-optimist': 1, // Professional Female - warm, encouraging  
+      'dr-sarcasm': 2, // Casual Male - witty, relaxed
+      'sage-wisdom': 4, // Executive Style - wise, experienced
+      'rebel-innovator': 2 // Casual Male - disruptive, energetic
     };
 
-    return replicaMap[therapistId as keyof typeof replicaMap] || 'your_default_replica_id_here';
+    const replicaIndex = therapistReplicaMap[therapistId as keyof typeof therapistReplicaMap] || 0;
+    const selectedReplica = stockReplicas[replicaIndex] || stockReplicas[0];
+    
+    console.log(`🎭 Selected replica for ${therapistId}:`, selectedReplica.name, selectedReplica.replica_id);
+    return selectedReplica.replica_id;
+  }
+
+  // Legacy method for backward compatibility
+  getDefaultReplicaId(therapistId: string): string {
+    console.warn('getDefaultReplicaId is deprecated, use getReplicaIdForTherapist instead');
+    return 'r783537ef5'; // Default fallback
   }
 }

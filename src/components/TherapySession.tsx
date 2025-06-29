@@ -77,23 +77,24 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         therapist.name
       );
       setGeneratedScript(script);
-      console.log('✅ Generated script:', script);
-      
-      // Get replica ID for the therapist
-      const replicaId = tavusApiRef.current.getDefaultReplicaId(therapist.id);
+      console.log('✅ Generated script:', script.substring(0, 100) + '...');
       
       setGenerationStage('video');
       
-      // Generate video with Tavus
+      // Get appropriate stock replica ID for the therapist
+      const replicaId = await tavusApiRef.current.getReplicaIdForTherapist(therapist.id);
+      console.log('🎭 Using replica ID:', replicaId);
+      
+      // Generate video with Tavus using stock replica
       const videoRequest = {
         replica_id: replicaId,
         script: script,
         video_name: `${therapist.name} - Startup Therapy Session`,
-        fast: true // Use fast rendering for demo
+        fast: true // Use fast rendering for quicker generation
       };
       
       try {
-        console.log('🎬 Generating video with Tavus...');
+        console.log('🎬 Generating video with Tavus stock replica...');
         const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
         setVideoData(videoResponse);
         
@@ -106,7 +107,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         }
       } catch (videoError) {
         console.error('❌ Video generation failed:', videoError);
-        setVideoError('Video generation unavailable - using demo mode');
+        setVideoError(`Video generation failed: ${videoError instanceof Error ? videoError.message : 'Unknown error'}`);
         // Continue with demo mode
         setTimeout(() => {
           setIsGenerating(false);
@@ -135,16 +136,21 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     
     const poll = async () => {
       try {
+        console.log(`🔄 Polling video status (attempt ${attempts + 1}/${maxAttempts})...`);
         const status = await tavusApiRef.current.getVideoStatus(videoId);
         setVideoData(status);
         
+        console.log('📊 Video status:', status.status);
+        
         if (status.status === 'ready') {
+          console.log('✅ Video generation completed!');
           setIsGenerating(false);
           setShowResults(true);
           return;
         }
         
         if (status.status === 'error' || attempts >= maxAttempts) {
+          console.warn('⚠️ Video generation timed out or failed');
           setVideoError('Video generation timed out - using demo mode');
           setIsGenerating(false);
           setShowResults(true);
@@ -154,7 +160,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         attempts++;
         setTimeout(poll, 10000); // Poll every 10 seconds
       } catch (error) {
-        console.error('Error polling video status:', error);
+        console.error('❌ Error polling video status:', error);
         setVideoError('Video generation failed - using demo mode');
         setIsGenerating(false);
         setShowResults(true);
@@ -273,7 +279,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       case 'script':
         return 'Creating personalized therapy script with AI...';
       case 'video':
-        return 'Generating AI video with Tavus...';
+        return 'Generating AI video with Tavus stock replica...';
       case 'audio':
         return 'Processing voice with ElevenLabs...';
       default:
@@ -297,21 +303,22 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           </p>
           <div className="space-y-2 text-sm text-gray-500">
             <div className="flex items-center justify-center space-x-2">
-              <Loader className={`w-4 h-4 ${generationStage === 'script' ? 'animate-spin' : ''}`} />
-              <span className={generationStage === 'script' ? 'text-blue-600 font-medium' : ''}>
-                Generating AI therapy script...
+              <Loader className={`w-4 h-4 ${generationStage === 'script' ? 'animate-spin text-blue-600' : 'text-green-500'}`} />
+              <span className={generationStage === 'script' ? 'text-blue-600 font-medium' : 'text-green-600'}>
+                {generationStage === 'script' ? 'Generating AI therapy script...' : '✓ Script generated'}
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
-              <Loader className={`w-4 h-4 ${generationStage === 'video' ? 'animate-spin' : ''}`} />
-              <span className={generationStage === 'video' ? 'text-blue-600 font-medium' : ''}>
-                Creating AI video...
+              <Loader className={`w-4 h-4 ${generationStage === 'video' ? 'animate-spin text-blue-600' : generationStage === 'audio' ? 'text-green-500' : ''}`} />
+              <span className={generationStage === 'video' ? 'text-blue-600 font-medium' : generationStage === 'audio' ? 'text-green-600' : ''}>
+                {generationStage === 'video' ? 'Creating AI video with stock replica...' : 
+                 generationStage === 'audio' ? '✓ Video processing' : 'Creating AI video...'}
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2">
-              <Loader className={`w-4 h-4 ${generationStage === 'audio' ? 'animate-spin' : ''}`} />
+              <Loader className={`w-4 h-4 ${generationStage === 'audio' ? 'animate-spin text-blue-600' : ''}`} />
               <span className={generationStage === 'audio' ? 'text-blue-600 font-medium' : ''}>
-                Processing voice narration...
+                {generationStage === 'audio' ? 'Processing voice narration...' : 'Processing voice...'}
               </span>
             </div>
           </div>
@@ -365,6 +372,15 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                     Your browser does not support the video tag.
                   </video>
                 </div>
+              ) : videoData?.hosted_url && !videoError ? (
+                <div className="mb-6">
+                  <iframe
+                    src={videoData.hosted_url}
+                    className="w-full max-w-md mx-auto rounded-xl aspect-video"
+                    allow="autoplay; fullscreen"
+                    title="AI Therapy Session"
+                  />
+                </div>
               ) : (
                 <div className="mb-6">
                   <div className="text-8xl mb-4">{therapist.avatar}</div>
@@ -394,7 +410,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                 <div className="flex items-center justify-center space-x-4 mb-4">
                   <button
                     onClick={handlePlayPause}
-                    disabled={!audioBlob && !videoData?.download_url}
+                    disabled={!audioBlob && !videoData?.download_url && !videoData?.hosted_url}
                     className="w-16 h-16 bg-white rounded-full flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-50"
                   >
                     {isPlaying ? (
@@ -461,7 +477,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">{generatedScript}</p>
               </div>
               <div className="mt-3 text-sm text-purple-600">
-                ✨ Generated using OpenRouter API with Mistral AI
+                ✨ Generated using OpenRouter API with Mistral AI • Video created with Tavus stock replica
               </div>
             </div>
           )}
