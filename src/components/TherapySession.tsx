@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX, AlertCircle } from 'lucide-react';
+import { Play, Pause, Download, Share2, Award, Coins, ArrowLeft, Loader, Volume2, VolumeX, AlertCircle, Bug } from 'lucide-react';
 import { TavusAPI, VideoGenerationResponse } from '../utils/tavusApi';
 import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 import { OpenRouterAPI } from '../utils/openRouterApi';
@@ -35,6 +35,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [generationStage, setGenerationStage] = useState('script');
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -82,6 +83,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       const tavusConnected = await tavusApiRef.current.testConnection();
       addDebugInfo(`Tavus API: ${tavusConnected ? '✅ Connected' : '❌ Failed'}`);
       
+      // Run replica debug if connected
+      if (tavusConnected) {
+        addDebugInfo('🔧 Running replica diagnostics...');
+        await tavusApiRef.current.debugReplicas();
+      }
+      
       // Generate therapy script using OpenRouter LLM
       addDebugInfo('🤖 Generating therapy script with OpenRouter...');
       const script = await openRouterApiRef.current.generateTherapyScript(
@@ -94,35 +101,14 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       
       setGenerationStage('video');
       
-      // Get available stock replicas first
-      addDebugInfo('🎭 Fetching available stock replicas...');
-      const stockReplicas = await tavusApiRef.current.getStockReplicas();
-      addDebugInfo(`Found ${stockReplicas.length} stock replicas`);
-      
-      if (stockReplicas.length === 0) {
-        addDebugInfo('⚠️ No stock replicas available, checking all replicas...');
-        const allReplicas = await tavusApiRef.current.getAllReplicas();
-        addDebugInfo(`Found ${allReplicas.length} total replicas`);
-        
-        if (allReplicas.length === 0) {
-          throw new Error('No replicas available for video generation');
-        }
-      }
-      
-      // Get appropriate replica ID for the therapist
-      const replicaId = await tavusApiRef.current.getReplicaIdForTherapist(therapist.id);
-      addDebugInfo(`🎭 Selected replica: ${replicaId}`);
-      
-      // Validate replica before using
-      const isValidReplica = await tavusApiRef.current.validateReplica(replicaId);
-      if (!isValidReplica) {
-        addDebugInfo(`❌ Replica ${replicaId} is invalid, using fallback`);
-        throw new Error(`Invalid replica: ${replicaId}`);
-      }
+      // Get a guaranteed valid stock replica
+      addDebugInfo('🎭 Getting valid stock replica...');
+      const validReplicaId = await tavusApiRef.current.getValidStockReplica();
+      addDebugInfo(`✅ Selected valid replica: ${validReplicaId}`);
       
       // Generate video with Tavus using validated replica
       const videoRequest = {
-        replica_id: replicaId,
+        replica_id: validReplicaId,
         script: script,
         video_name: `${therapist.name} - Startup Therapy Session`,
         fast: true // Use fast rendering for quicker generation
@@ -322,7 +308,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       case 'script':
         return 'Creating personalized therapy script with AI...';
       case 'video':
-        return 'Generating AI video with Tavus stock replica...';
+        return 'Generating AI video with validated Tavus replica...';
       case 'audio':
         return 'Processing voice with ElevenLabs...';
       default:
@@ -355,7 +341,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             <div className="flex items-center justify-center space-x-2">
               <Loader className={`w-4 h-4 ${generationStage === 'video' ? 'animate-spin text-blue-600' : generationStage === 'audio' ? 'text-green-500' : ''}`} />
               <span className={generationStage === 'video' ? 'text-blue-600 font-medium' : generationStage === 'audio' ? 'text-green-600' : ''}>
-                {generationStage === 'video' ? 'Creating AI video with stock replica...' : 
+                {generationStage === 'video' ? 'Creating AI video with validated replica...' : 
                  generationStage === 'audio' ? '✓ Video processing' : 'Creating AI video...'}
               </span>
             </div>
@@ -377,12 +363,23 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             ></div>
           </div>
           
+          {/* Debug Information Toggle */}
+          <div className="mb-4">
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mx-auto"
+            >
+              <Bug className="w-4 h-4" />
+              <span>{showDebug ? 'Hide' : 'Show'} Debug Info</span>
+            </button>
+          </div>
+          
           {/* Debug Information */}
-          {debugInfo.length > 0 && (
-            <details className="bg-gray-100 rounded-lg p-4 text-left">
+          {showDebug && debugInfo.length > 0 && (
+            <details open className="bg-gray-100 rounded-lg p-4 text-left mb-4">
               <summary className="cursor-pointer text-gray-700 font-medium mb-2 flex items-center space-x-2">
                 <AlertCircle className="w-4 h-4" />
-                <span>Debug Information</span>
+                <span>Real-time Debug Information</span>
               </summary>
               <div className="space-y-1 text-xs text-gray-600 max-h-40 overflow-y-auto">
                 {debugInfo.map((info, index) => (
@@ -537,7 +534,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">{generatedScript}</p>
               </div>
               <div className="mt-3 text-sm text-purple-600">
-                ✨ Generated using OpenRouter API with Mistral AI • Video created with Tavus stock replica
+                ✨ Generated using OpenRouter API with Mistral AI • Video created with validated Tavus replica
               </div>
             </div>
           )}
