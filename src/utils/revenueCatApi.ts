@@ -1,4 +1,3 @@
-const REVENUECAT_API_KEY = 'sk_azvUatFGrdKCaVCIdLlaVXjKMqYMR';
 const REVENUECAT_API_URL = 'https://api.revenuecat.com/v1';
 
 export interface RevenueCatCustomer {
@@ -68,9 +67,12 @@ export class RevenueCatAPI {
   private appId: string = 'dreamadvisor'; // Your app identifier
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || REVENUECAT_API_KEY;
+    this.apiKey = apiKey || import.meta.env.VITE_REVENUECAT_API_KEY || '';
     if (!this.apiKey) {
       console.warn('RevenueCat API key not found. Subscription features will be simulated.');
+    } else if (this.apiKey.startsWith('sk_')) {
+      console.error('❌ Secret API key detected! Client-side operations require a public API key (pk_). Falling back to simulation mode.');
+      this.apiKey = '';
     }
   }
 
