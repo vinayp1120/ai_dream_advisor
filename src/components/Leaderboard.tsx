@@ -22,9 +22,9 @@ export const Leaderboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Add timeout to prevent infinite loading
+      // Increased timeout to 30 seconds to allow more time for the query to complete
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
+        setTimeout(() => reject(new Error('Request timeout')), 30000)
       );
       
       const fetchPromise = supabase
