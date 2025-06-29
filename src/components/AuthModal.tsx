@@ -22,20 +22,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   useEffect(() => {
     if (isAuthenticated && isOpen) {
       console.log('User authenticated, closing modal');
-      onClose();
+      // Small delay to ensure state is properly updated
+      setTimeout(() => {
+        onClose();
+        resetForm();
+      }, 100);
     }
   }, [isAuthenticated, isOpen, onClose]);
 
   // Reset form when modal opens/closes
   useEffect(() => {
     if (!isOpen) {
-      setEmail('');
-      setPassword('');
-      setFullName('');
-      setError(null);
-      setLoading(false);
+      resetForm();
     }
   }, [isOpen]);
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setError(null);
+    setLoading(false);
+  };
 
   if (!isOpen) return null;
 
@@ -105,23 +113,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
     }
   };
 
-  const resetForm = () => {
-    setEmail('');
-    setPassword('');
-    setFullName('');
-    setError(null);
-  };
-
   const switchMode = () => {
     setMode(mode === 'signin' ? 'signup' : 'signin');
-    resetForm();
+    setError(null);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 relative">
         <button
-          onClick={onClose}
+          onClick={() => {
+            onClose();
+            resetForm();
+          }}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
         >
           <X className="w-6 h-6" />
