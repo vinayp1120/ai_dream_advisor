@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, User, Chrome, Loader } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -16,7 +16,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, isAuthenticated } = useAuth();
+
+  // Close modal when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && isOpen) {
+      console.log('User authenticated, closing modal');
+      onClose();
+    }
+  }, [isAuthenticated, isOpen, onClose]);
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setEmail('');
+      setPassword('');
+      setFullName('');
+      setError(null);
+      setLoading(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -57,14 +76,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
     try {
       if (mode === 'signin') {
-        await signInWithEmail(email, password);
+        const result = await signInWithEmail(email, password);
+        console.log('Sign in successful:', result);
+        // Modal will close automatically via useEffect when isAuthenticated becomes true
       } else {
-        await signUpWithEmail(email, password, fullName);
+        const result = await signUpWithEmail(email, password, fullName);
+        console.log('Sign up successful:', result);
+        // Modal will close automatically via useEffect when isAuthenticated becomes true
       }
-      onClose();
     } catch (err: any) {
+      console.error('Auth error:', err);
       setError(getErrorMessage(err));
-    } finally {
       setLoading(false);
     }
   };
@@ -75,10 +97,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
     try {
       await signInWithGoogle();
-      onClose();
+      // Modal will close automatically via useEffect when isAuthenticated becomes true
     } catch (err: any) {
+      console.error('Google sign in error:', err);
       setError(getErrorMessage(err));
-    } finally {
       setLoading(false);
     }
   };

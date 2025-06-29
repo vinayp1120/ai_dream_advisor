@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { MessageSquare, Mic, Send, Loader, MicOff, Volume2 } from 'lucide-react';
+import { MessageSquare, Mic, Send, Loader, MicOff, Volume2, ArrowLeft, Brain, Sparkles } from 'lucide-react';
 import { AudioRecorder } from '../utils/audioRecorder';
 import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 
@@ -21,6 +21,10 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
   const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const elevenLabsRef = useRef<ElevenLabsAPI>(new ElevenLabsAPI());
+
+  const handleLogoClick = () => {
+    onBack();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,160 +133,182 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
   };
 
   return (
-    <section className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="text-center mb-8">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            What's Your
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> Brilliant </span>
-            Idea?
-          </h2>
-          <p className="text-lg text-gray-600">
-            Don't hold back. Our AI therapists have heard it all before.
-          </p>
+    <section className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50">
+      {/* Header with Logo */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <button 
+              onClick={handleLogoClick}
+              className="flex items-center space-x-2 hover:scale-105 transition-transform"
+            >
+              <div className="relative">
+                <Brain className="w-8 h-8 text-blue-600" />
+                <Sparkles className="w-4 h-4 text-orange-500 absolute -top-1 -right-1" />
+              </div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                DreamAdvisor
+              </h1>
+            </button>
+          </div>
         </div>
+      </header>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-xl">
-          <form onSubmit={handleSubmit}>
-            <div className="mb-6">
-              <div className="flex space-x-4 mb-4">
-                <button
-                  type="button"
-                  onClick={() => setMethod('text')}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
-                    method === 'text' 
-                      ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' 
-                      : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
-                  }`}
-                >
-                  <MessageSquare className="w-5 h-5" />
-                  <span>Type It</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleVoiceRecord}
-                  disabled={isTranscribing}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
-                    method === 'voice' 
-                      ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' 
-                      : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
-                  } ${isTranscribing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isRecording ? (
-                    <MicOff className="w-5 h-5 text-red-500 animate-pulse" />
-                  ) : (
-                    <Mic className="w-5 h-5" />
-                  )}
-                  <span>
-                    {isRecording ? `Recording... ${formatTime(recordingTime)}` : 
-                     isTranscribing ? 'Processing...' : 'Speak It'}
-                  </span>
-                </button>
+      <div className="pt-16 flex items-center justify-center p-4 min-h-screen">
+        <div className="max-w-2xl w-full">
+          <div className="text-center mb-8">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              What's Your
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> Brilliant </span>
+              Idea?
+            </h2>
+            <p className="text-lg text-gray-600">
+              Don't hold back. Our AI therapists have heard it all before.
+            </p>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-xl">
+            <form onSubmit={handleSubmit}>
+              <div className="mb-6">
+                <div className="flex space-x-4 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setMethod('text')}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
+                      method === 'text' 
+                        ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' 
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    }`}
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                    <span>Type It</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleVoiceRecord}
+                    disabled={isTranscribing}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
+                      method === 'voice' 
+                        ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' 
+                        : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                    } ${isTranscribing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isRecording ? (
+                      <MicOff className="w-5 h-5 text-red-500 animate-pulse" />
+                    ) : (
+                      <Mic className="w-5 h-5" />
+                    )}
+                    <span>
+                      {isRecording ? `Recording... ${formatTime(recordingTime)}` : 
+                       isTranscribing ? 'Processing...' : 'Speak It'}
+                    </span>
+                  </button>
+                </div>
+
+                {transcriptionError && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-yellow-800 text-sm">{transcriptionError}</p>
+                  </div>
+                )}
+
+                {method === 'text' ? (
+                  <textarea
+                    value={idea}
+                    onChange={(e) => setIdea(e.target.value)}
+                    placeholder="Describe your startup idea in detail... The weirder, the better!"
+                    className="w-full h-32 p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-700 placeholder-gray-400"
+                    required
+                  />
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center">
+                    {isRecording ? (
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center relative">
+                          <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                          <div className="absolute inset-0 border-4 border-red-300 rounded-full animate-ping"></div>
+                        </div>
+                        <p className="text-gray-600">Recording your brilliant idea...</p>
+                        <p className="text-sm text-gray-500">{formatTime(recordingTime)}</p>
+                        <button
+                          type="button"
+                          onClick={stopRecording}
+                          className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          Stop Recording
+                        </button>
+                      </div>
+                    ) : isTranscribing ? (
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                          <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+                        </div>
+                        <p className="text-gray-600">Converting speech to text...</p>
+                        <p className="text-sm text-gray-500">This may take a moment...</p>
+                      </div>
+                    ) : idea ? (
+                      <div className="space-y-4">
+                        <div className="text-left bg-gray-50 rounded-xl p-4">
+                          <p className="text-gray-700 italic">"{idea}"</p>
+                        </div>
+                        {audioBlob && (
+                          <div className="flex justify-center space-x-4">
+                            <button
+                              type="button"
+                              onClick={playRecording}
+                              disabled={isPlaying}
+                              className="flex items-center space-x-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                            >
+                              <Volume2 className="w-4 h-4" />
+                              <span>{isPlaying ? 'Playing...' : 'Play Recording'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={startRecording}
+                              className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
+                            >
+                              Record Again
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
+                          <Mic className="w-8 h-8 text-orange-500" />
+                        </div>
+                        <p className="text-gray-600">Click "Speak It" to record your idea</p>
+                        <p className="text-sm text-gray-500">Make sure your microphone is enabled</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {transcriptionError && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-yellow-800 text-sm">{transcriptionError}</p>
-                </div>
-              )}
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={!idea.trim() || isRecording || isTranscribing}
+                  className="flex-1 flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>Submit for Therapy</span>
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </form>
+          </div>
 
-              {method === 'text' ? (
-                <textarea
-                  value={idea}
-                  onChange={(e) => setIdea(e.target.value)}
-                  placeholder="Describe your startup idea in detail... The weirder, the better!"
-                  className="w-full h-32 p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-700 placeholder-gray-400"
-                  required
-                />
-              ) : (
-                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center">
-                  {isRecording ? (
-                    <div className="flex flex-col items-center space-y-4">
-                      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center relative">
-                        <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
-                        <div className="absolute inset-0 border-4 border-red-300 rounded-full animate-ping"></div>
-                      </div>
-                      <p className="text-gray-600">Recording your brilliant idea...</p>
-                      <p className="text-sm text-gray-500">{formatTime(recordingTime)}</p>
-                      <button
-                        type="button"
-                        onClick={stopRecording}
-                        className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
-                      >
-                        Stop Recording
-                      </button>
-                    </div>
-                  ) : isTranscribing ? (
-                    <div className="flex flex-col items-center space-y-4">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Loader className="w-8 h-8 text-blue-500 animate-spin" />
-                      </div>
-                      <p className="text-gray-600">Converting speech to text...</p>
-                      <p className="text-sm text-gray-500">This may take a moment...</p>
-                    </div>
-                  ) : idea ? (
-                    <div className="space-y-4">
-                      <div className="text-left bg-gray-50 rounded-xl p-4">
-                        <p className="text-gray-700 italic">"{idea}"</p>
-                      </div>
-                      {audioBlob && (
-                        <div className="flex justify-center space-x-4">
-                          <button
-                            type="button"
-                            onClick={playRecording}
-                            disabled={isPlaying}
-                            className="flex items-center space-x-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
-                          >
-                            <Volume2 className="w-4 h-4" />
-                            <span>{isPlaying ? 'Playing...' : 'Play Recording'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={startRecording}
-                            className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
-                          >
-                            Record Again
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center space-y-4">
-                      <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
-                        <Mic className="w-8 h-8 text-orange-500" />
-                      </div>
-                      <p className="text-gray-600">Click "Speak It" to record your idea</p>
-                      <p className="text-sm text-gray-500">Make sure your microphone is enabled</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex space-x-4">
-              <button
-                type="button"
-                onClick={onBack}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                Back
-              </button>
-              <button
-                type="submit"
-                disabled={!idea.trim() || isRecording || isTranscribing}
-                className="flex-1 flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span>Submit for Therapy</span>
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-500">
-            Your idea will remain confidential until you choose to mint it as an NFT
-          </p>
+          <div className="mt-8 text-center">
+            <p className="text-sm text-gray-500">
+              Your idea will remain confidential until you choose to mint it as an NFT
+            </p>
+          </div>
         </div>
       </div>
     </section>
