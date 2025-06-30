@@ -10,7 +10,6 @@ export const Leaderboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const { isAuthenticated, profile } = useAuth();
 
   useEffect(() => {
@@ -22,7 +21,7 @@ export const Leaderboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Increased timeout to 30 seconds to allow more time for the query to complete
+      // Fetch leaderboard data with timeout protection
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Request timeout')), 30000)
       );
@@ -74,9 +73,43 @@ export const Leaderboard: React.FC = () => {
     }
   };
 
-  const handleUpgrade = () => {
-    setShowUpgradeModal(true);
+  // Determine how many entries to show and what message to display
+  const getLeaderboardDisplay = () => {
+    const count = leaderboardData.length;
+    
+    if (count === 0) {
+      return {
+        title: 'No Ideas Yet',
+        subtitle: 'Be the first to create!',
+        showEntries: false,
+        message: 'The leaderboard is waiting for brilliant minds like yours. Be the first to submit a genius idea and claim the top spot!'
+      };
+    } else if (count === 1) {
+      return {
+        title: 'Top Idea',
+        subtitle: 'Leading the way',
+        showEntries: true,
+        message: null
+      };
+    } else if (count <= 5) {
+      return {
+        title: `Top ${count} Ideas`,
+        subtitle: 'Current leaders',
+        showEntries: true,
+        message: null
+      };
+    } else {
+      return {
+        title: 'Top 5 Ideas',
+        subtitle: 'Hall of Fame leaders',
+        showEntries: true,
+        message: null
+      };
+    }
   };
+
+  const displayInfo = getLeaderboardDisplay();
+  const entriesToShow = displayInfo.showEntries ? leaderboardData.slice(0, 5) : [];
 
   if (loading) {
     return (
@@ -148,7 +181,7 @@ export const Leaderboard: React.FC = () => {
             </p>
           </div>
 
-          {/* Premium Upgrade Banner */}
+          {/* Premium Upgrade Banner - only show for authenticated free users */}
           {isAuthenticated && profile?.subscription_tier === 'free' && (
             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl p-6 mb-8 text-white text-center">
               <div className="flex items-center justify-center space-x-3 mb-3">
@@ -159,7 +192,7 @@ export const Leaderboard: React.FC = () => {
                 Get access to premium therapists, unlimited sessions, and exclusive insights
               </p>
               <button
-                onClick={handleUpgrade}
+                onClick={() => alert('Premium upgrade coming soon!')}
                 className="bg-white text-orange-600 px-8 py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
               >
                 Upgrade to Premium
@@ -168,14 +201,15 @@ export const Leaderboard: React.FC = () => {
           )}
 
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-xl">
-            {leaderboardData.length === 0 ? (
+            {!displayInfo.showEntries ? (
+              // Empty state
               <div className="text-center py-16">
                 <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Star className="w-12 h-12 text-blue-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">No Genius Ideas Yet!</h3>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">{displayInfo.title}</h3>
                 <p className="text-lg text-gray-600 mb-8 max-w-md mx-auto">
-                  The leaderboard is waiting for brilliant minds like yours. Be the first to submit a genius idea and claim the top spot!
+                  {displayInfo.message}
                 </p>
                 
                 {isAuthenticated ? (
@@ -209,8 +243,14 @@ export const Leaderboard: React.FC = () => {
                 )}
               </div>
             ) : (
+              // Show leaderboard entries
               <div className="space-y-4">
-                {leaderboardData.map((entry, index) => {
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{displayInfo.title}</h3>
+                  <p className="text-gray-600">{displayInfo.subtitle}</p>
+                </div>
+
+                {entriesToShow.map((entry, index) => {
                   const rank = index + 1;
                   return (
                     <div
@@ -256,7 +296,12 @@ export const Leaderboard: React.FC = () => {
                 })}
 
                 <div className="mt-8 text-center">
-                  <p className="text-gray-500 mb-4">Want to see your idea here?</p>
+                  <p className="text-gray-500 mb-4">
+                    {leaderboardData.length > 5 
+                      ? `Showing top 5 of ${leaderboardData.length} genius ideas` 
+                      : 'Want to see your idea here?'
+                    }
+                  </p>
                   <button 
                     onClick={handleGetStarted}
                     className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-xl hover:shadow-lg transition-all"
@@ -275,61 +320,6 @@ export const Leaderboard: React.FC = () => {
         onClose={() => setShowAuthModal(false)}
         initialMode="signup"
       />
-
-      {/* Premium Upgrade Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 relative">
-            <button
-              onClick={() => setShowUpgradeModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              ✕
-            </button>
-            
-            <div className="text-center">
-              <Crown className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Upgrade to Premium</h3>
-              <p className="text-gray-600 mb-6">
-                Unlock premium therapists, unlimited sessions, and exclusive features for just $9.99/month
-              </p>
-              
-              <div className="space-y-3 mb-6 text-left">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-gray-700">Access to all premium therapists</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-gray-700">Unlimited therapy sessions</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-gray-700">Priority video generation</span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-gray-700">Advanced analytics & insights</span>
-                </div>
-              </div>
-              
-              <button
-                onClick={() => {
-                  setShowUpgradeModal(false);
-                  alert('Premium upgrade coming soon! This would integrate with RevenueCat for subscription management.');
-                }}
-                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
-              >
-                Upgrade Now - $9.99/month
-              </button>
-              
-              <p className="text-xs text-gray-500 mt-3">
-                Cancel anytime • 7-day free trial
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
