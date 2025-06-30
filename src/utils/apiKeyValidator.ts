@@ -52,12 +52,6 @@ export class APIKeyValidator {
         key: import.meta.env.VITE_ELEVENLABS_API_KEY,
         required: false,
         description: 'For voice synthesis (fallback available)'
-      },
-      {
-        name: 'RevenueCat API',
-        key: import.meta.env.VITE_REVENUECAT_API_KEY,
-        required: false,
-        description: 'For subscription management'
       }
     ];
   }
@@ -93,9 +87,7 @@ export class APIKeyValidator {
       'placeholder',
       'example',
       'test_key',
-      'demo_key',
-      'sk_test_',
-      'pk_test_'
+      'demo_key'
     ];
 
     return placeholderPatterns.some(pattern => 

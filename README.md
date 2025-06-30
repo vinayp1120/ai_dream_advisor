@@ -20,7 +20,6 @@ Turn your wild startup ideas into gold with AI-powered therapy sessions! Get bru
   - Tavus (Video generation)
   - ElevenLabs (Voice synthesis)
 - **Blockchain**: Algorand (NFT minting)
-- **Subscriptions**: RevenueCat
 
 ## 🛠️ Setup
 

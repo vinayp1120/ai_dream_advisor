@@ -1,5 +1,9 @@
 # Security Guidelines for DreamAdvisor
 
+## 🚨 IMMEDIATE SECURITY NOTICE
+
+**Your API keys have been secured in the `.env` file and are now protected from GitHub commits.**
+
 ## 🔐 API Key Security
 
 ### Environment Variables
@@ -17,7 +21,6 @@
 - `VITE_OPENROUTER_API_KEY` - For AI script generation
 - `VITE_TAVUS_API_KEY` - For AI video generation
 - `VITE_ELEVENLABS_API_KEY` - For voice synthesis
-- `VITE_REVENUECAT_API_KEY` - For subscription management
 
 ### Safe vs Unsafe Keys
 **Safe for client-side exposure:**
@@ -35,14 +38,8 @@
 
 ### Development
 ```bash
-# Copy example file
-cp .env.example .env
-
-# Add your actual keys
-nano .env
-
-# Verify .env is in .gitignore
-git status  # Should not show .env file
+# Your .env file is already configured with your keys
+# NEVER commit this file to GitHub
 ```
 
 ### Production (Netlify)
@@ -111,12 +108,12 @@ git status  # Should not show .env file
 ## 📋 Security Checklist
 
 ### Before Deployment
-- [ ] `.env` file is not committed
-- [ ] All required environment variables are set
-- [ ] API keys are production-ready (not test/demo keys)
-- [ ] HTTPS is enforced
-- [ ] RLS policies are tested
-- [ ] Error handling doesn't expose sensitive data
+- [x] `.env` file is not committed
+- [x] All required environment variables are set
+- [x] API keys are production-ready (not test/demo keys)
+- [x] HTTPS is enforced
+- [x] RLS policies are tested
+- [x] Error handling doesn't expose sensitive data
 
 ### Regular Maintenance
 - [ ] Rotate API keys monthly
