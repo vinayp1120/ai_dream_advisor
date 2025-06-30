@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RevenueCatAPI } from '../utils/revenueCatApi';
 import { useAuth } from './useAuth';
-import { supabase } from '../lib/supabase';
 
 export interface SubscriptionState {
   isSubscribed: boolean;
@@ -20,10 +18,9 @@ export function useSubscription() {
   });
 
   const { user, profile, updateProfile } = useAuth();
-  const revenueCatApi = new RevenueCatAPI();
 
   useEffect(() => {
-    if (user) {
+    if (user && profile) {
       checkSubscriptionStatus();
     } else {
       setSubscriptionState({
@@ -32,44 +29,25 @@ export function useSubscription() {
         loading: false
       });
     }
-  }, [user]);
+  }, [user, profile]);
 
   const checkSubscriptionStatus = async () => {
-    if (!user) return;
-
     try {
       setSubscriptionState(prev => ({ ...prev, loading: true, error: undefined }));
 
-      // Check if RevenueCat is in simulation mode
-      if (revenueCatApi.isInSimulationMode()) {
-        console.log('🎭 RevenueCat in simulation mode - using profile subscription tier');
-        
-        // Use the subscription tier from the user's profile
-        const subscriptionTier = profile?.subscription_tier || 'free';
-        const isSubscribed = subscriptionTier === 'premium' || subscriptionTier === 'enterprise';
-        
-        setSubscriptionState({
-          isSubscribed,
-          subscriptionTier,
-          loading: false,
-          managementUrl: 'https://app.revenuecat.com' // Placeholder URL
-        });
-        return;
-      }
-
-      // Get subscription info from RevenueCat
-      const customerInfo = await revenueCatApi.getCustomerInfo(user.id);
+      // Use the subscription tier from the user's profile
+      const subscriptionTier = profile?.subscription_tier || 'free';
+      const isSubscribed = subscriptionTier === 'premium' || subscriptionTier === 'enterprise';
       
-      // Update local profile if subscription status changed
-      if (profile && profile.subscription_tier !== customerInfo.subscriptionTier) {
-        await updateProfile({ subscription_tier: customerInfo.subscriptionTier });
-      }
-
+      // Mock next billing date
+      const nextBilling = new Date();
+      nextBilling.setMonth(nextBilling.getMonth() + 1);
+      
       setSubscriptionState({
-        isSubscribed: customerInfo.isSubscribed,
-        subscriptionTier: customerInfo.subscriptionTier,
-        expiresDate: customerInfo.expiresDate,
-        managementUrl: customerInfo.managementUrl,
+        isSubscribed,
+        subscriptionTier,
+        expiresDate: isSubscribed ? nextBilling.toISOString() : undefined,
+        managementUrl: 'https://dreamadvisor.app/billing',
         loading: false
       });
 
@@ -97,51 +75,22 @@ export function useSubscription() {
     try {
       setSubscriptionState(prev => ({ ...prev, loading: true, error: undefined }));
 
-      // If RevenueCat is in simulation mode, simulate the upgrade
-      if (revenueCatApi.isInSimulationMode()) {
-        console.log('🎭 Simulating premium upgrade...');
-        
-        // Simulate payment processing delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Update profile to premium
-        await updateProfile({ subscription_tier: 'premium' });
-        
-        setSubscriptionState({
-          isSubscribed: true,
-          subscriptionTier: 'premium',
-          loading: false,
-          managementUrl: 'https://app.revenuecat.com'
-        });
-        
-        return true;
-      }
-
-      // Real RevenueCat integration
-      await revenueCatApi.createCustomer(user.id, user.email);
-      console.log('🔄 Initiating premium upgrade...');
+      console.log('🎭 Simulating premium upgrade...');
       
       // Simulate payment processing delay
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Create the purchase
-      const updatedCustomer = await revenueCatApi.createPurchase(user.id, productId);
+      // Update profile to premium
+      await updateProfile({ subscription_tier: 'premium' });
       
-      // Update subscription state
-      const customerInfo = await revenueCatApi.getCustomerInfo(user.id);
-      
-      // Update profile in database
-      await updateProfile({ subscription_tier: customerInfo.subscriptionTier });
-
       setSubscriptionState({
-        isSubscribed: customerInfo.isSubscribed,
-        subscriptionTier: customerInfo.subscriptionTier,
-        expiresDate: customerInfo.expiresDate,
-        managementUrl: customerInfo.managementUrl,
-        loading: false
+        isSubscribed: true,
+        subscriptionTier: 'premium',
+        loading: false,
+        managementUrl: 'https://dreamadvisor.app/billing'
       });
-
-      return customerInfo.isSubscribed;
+      
+      return true;
 
     } catch (error) {
       console.error('Error upgrading to premium:', error);
@@ -155,18 +104,25 @@ export function useSubscription() {
   };
 
   const cancelSubscription = async (): Promise<boolean> => {
-    if (!user || !subscriptionState.managementUrl) {
+    if (!user) {
       return false;
     }
 
-    // Redirect to subscription management
-    window.open(subscriptionState.managementUrl, '_blank');
-    return true;
-  };
-
-  const getPaymentUrl = (productId: string = 'premium_monthly'): string => {
-    if (!user) return '';
-    return revenueCatApi.generatePaymentUrl(user.id, productId);
+    try {
+      // Update profile to free tier
+      await updateProfile({ subscription_tier: 'free' });
+      
+      setSubscriptionState({
+        isSubscribed: false,
+        subscriptionTier: 'free',
+        loading: false
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error canceling subscription:', error);
+      return false;
+    }
   };
 
   const refreshSubscription = () => {
@@ -179,7 +135,6 @@ export function useSubscription() {
     ...subscriptionState,
     upgradeToPremium,
     cancelSubscription,
-    getPaymentUrl,
     refreshSubscription,
     canAccessPremiumFeatures: subscriptionState.isSubscribed || subscriptionState.subscriptionTier !== 'free'
   };

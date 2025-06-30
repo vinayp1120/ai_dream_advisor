@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Crown, Check, Loader, CreditCard, Shield, Zap, Star, Users, Award } from 'lucide-react';
-import { useSubscription } from '../hooks/useSubscription';
+import { PaymentModal } from './PaymentModal';
 
 interface PremiumUpgradeModalProps {
   isOpen: boolean;
@@ -13,9 +13,8 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({
   onClose, 
   selectedPlan = 'monthly' 
 }) => {
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<'monthly' | 'yearly'>(selectedPlan);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const { upgradeToPremium, loading } = useSubscription();
 
   if (!isOpen) return null;
 
@@ -71,28 +70,28 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({
     }
   ];
 
-  const handleUpgrade = async () => {
-    try {
-      setIsProcessing(true);
-      const success = await upgradeToPremium(plans[currentPlan].id);
-      
-      if (success) {
-        // Show success message and close modal
-        alert('🎉 Welcome to Premium! You now have access to all premium features.');
-        onClose();
-      } else {
-        alert('❌ Upgrade failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('Upgrade error:', error);
-      alert('❌ Upgrade failed. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
+  const handleUpgrade = () => {
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    onClose();
   };
 
   const currentPlanData = plans[currentPlan];
   const monthlyPrice = currentPlan === 'yearly' ? (currentPlanData.price / 12).toFixed(2) : currentPlanData.price.toFixed(2);
+
+  if (showPaymentModal) {
+    return (
+      <PaymentModal
+        isOpen={true}
+        onClose={() => setShowPaymentModal(false)}
+        selectedPlan={currentPlan}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -210,20 +209,10 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({
           <div className="text-center">
             <button
               onClick={handleUpgrade}
-              disabled={isProcessing || loading}
-              className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-4 rounded-xl text-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3"
+              className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-4 rounded-xl text-lg font-semibold hover:shadow-lg transition-all flex items-center justify-center space-x-3"
             >
-              {isProcessing || loading ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-5 h-5" />
-                  <span>Start 7-Day Free Trial</span>
-                </>
-              )}
+              <CreditCard className="w-5 h-5" />
+              <span>Start 7-Day Free Trial</span>
             </button>
             
             <p className="text-xs text-gray-500 mt-3">
