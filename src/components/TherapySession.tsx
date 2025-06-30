@@ -37,7 +37,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   const [generationStage, setGenerationStage] = useState('script');
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
-  const [showDebug, setShowDebug] = useState(false);
+  const [showDebug, setShowDebug] = useState(true); // Show debug by default
   const [ideaId, setIdeaId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   
@@ -55,10 +55,9 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
 
   // Generate therapy script and video
   useEffect(() => {
-    if (user) {
-      generateTherapySession();
-    }
-  }, [idea, therapist, user]);
+    // Start generation immediately when component mounts
+    generateTherapySession();
+  }, [idea, therapist]);
 
   // Handle video progress
   useEffect(() => {
@@ -78,32 +77,46 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
   }, [isPlaying]);
 
   const addDebugInfo = (message: string) => {
-    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `${timestamp}: ${message}`;
+    console.log(`[TherapySession] ${logMessage}`);
+    setDebugInfo(prev => [...prev, logMessage]);
   };
 
   const saveIdeaToDatabase = async (): Promise<string> => {
     try {
       addDebugInfo('💾 Saving idea to database...');
       
+      if (!user?.id) {
+        addDebugInfo('⚠️ No user ID found, using demo mode');
+        return 'demo_idea_' + Date.now();
+      }
+
+      // Extract title from first 100 characters or use a default
+      const title = idea.length > 100 ? idea.substring(0, 97) + '...' : idea;
+      
       const { data, error } = await supabase
         .from('ideas')
         .insert({
-          user_id: user!.id,
-          title: idea.substring(0, 100), // Extract title from first 100 chars
+          user_id: user.id,
+          title: title,
           description: idea,
-          submission_method: 'text', // Default to text for now
+          submission_method: 'text',
           status: 'analyzing'
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        addDebugInfo(`❌ Database error: ${error.message}`);
+        return 'demo_idea_' + Date.now();
+      }
 
       addDebugInfo(`✅ Idea saved with ID: ${data.id}`);
       return data.id;
     } catch (error) {
       addDebugInfo(`❌ Failed to save idea: ${error}`);
-      throw error;
+      return 'demo_idea_' + Date.now();
     }
   };
 
@@ -111,11 +124,16 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     try {
       addDebugInfo('💾 Saving therapy session to database...');
       
+      if (!user?.id || ideaId.startsWith('demo_')) {
+        addDebugInfo('⚠️ Using demo mode for session');
+        return 'demo_session_' + Date.now();
+      }
+      
       const { data, error } = await supabase
         .from('therapy_sessions')
         .insert({
           idea_id: ideaId,
-          user_id: user!.id,
+          user_id: user.id,
           therapist_id: therapist.id,
           therapist_name: therapist.name,
           script: script,
@@ -124,18 +142,26 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        addDebugInfo(`❌ Database error: ${error.message}`);
+        return 'demo_session_' + Date.now();
+      }
 
       addDebugInfo(`✅ Therapy session saved with ID: ${data.id}`);
       return data.id;
     } catch (error) {
       addDebugInfo(`❌ Failed to save therapy session: ${error}`);
-      throw error;
+      return 'demo_session_' + Date.now();
     }
   };
 
   const updateTherapySession = async (sessionId: string, updates: any) => {
     try {
+      if (sessionId.startsWith('demo_')) {
+        addDebugInfo('📝 Skipping database update for demo session');
+        return;
+      }
+
       addDebugInfo('🔄 Updating therapy session...');
       
       const { error } = await supabase
@@ -143,27 +169,37 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         .update(updates)
         .eq('id', sessionId);
 
-      if (error) throw error;
+      if (error) {
+        addDebugInfo(`❌ Update error: ${error.message}`);
+        return;
+      }
 
       addDebugInfo('✅ Therapy session updated');
     } catch (error) {
       addDebugInfo(`❌ Failed to update therapy session: ${error}`);
-      console.error('Error updating therapy session:', error);
     }
   };
 
   const updateUserProfile = async (score: number) => {
     try {
+      if (!user?.id) {
+        addDebugInfo('⚠️ No user ID, skipping profile update');
+        return;
+      }
+
       addDebugInfo('👤 Updating user profile stats...');
       
       // Get current profile
       const { data: profile, error: fetchError } = await supabase
         .from('profiles')
         .select('total_sessions, total_score')
-        .eq('id', user!.id)
+        .eq('id', user.id)
         .single();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        addDebugInfo(`❌ Profile fetch error: ${fetchError.message}`);
+        return;
+      }
 
       const newTotalSessions = (profile.total_sessions || 0) + 1;
       const newTotalScore = (profile.total_score || 0) + score;
@@ -174,19 +210,26 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           total_sessions: newTotalSessions,
           total_score: newTotalScore
         })
-        .eq('id', user!.id);
+        .eq('id', user.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        addDebugInfo(`❌ Profile update error: ${updateError.message}`);
+        return;
+      }
 
       addDebugInfo('✅ User profile updated');
     } catch (error) {
       addDebugInfo(`❌ Failed to update user profile: ${error}`);
-      console.error('Error updating user profile:', error);
     }
   };
 
   const addToLeaderboard = async (sessionId: string, score: number, verdict: string) => {
     try {
+      if (!user?.id || sessionId.startsWith('demo_')) {
+        addDebugInfo('⚠️ Skipping leaderboard for demo mode');
+        return;
+      }
+
       if (score >= 7.0) { // Only add high-scoring ideas to leaderboard
         addDebugInfo('🏆 Adding to leaderboard...');
         
@@ -194,8 +237,8 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           .from('leaderboard_entries')
           .insert({
             session_id: sessionId,
-            user_id: user!.id,
-            username: user!.email?.split('@')[0] || 'Anonymous',
+            user_id: user.id,
+            username: user.email?.split('@')[0] || 'Anonymous',
             idea_title: idea.substring(0, 100),
             score: score,
             therapist_name: therapist.name,
@@ -203,13 +246,17 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             is_public: true
           });
 
-        if (error) throw error;
+        if (error) {
+          addDebugInfo(`❌ Leaderboard error: ${error.message}`);
+          return;
+        }
 
         addDebugInfo('✅ Added to leaderboard');
+      } else {
+        addDebugInfo(`📊 Score ${score} too low for leaderboard (need 7.0+)`);
       }
     } catch (error) {
       addDebugInfo(`❌ Failed to add to leaderboard: ${error}`);
-      console.error('Error adding to leaderboard:', error);
     }
   };
 
@@ -217,35 +264,35 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
     try {
       setIsGenerating(true);
       setVideoError(null);
+      setAudioError(null);
       setDebugInfo([]);
       setGenerationStage('script');
       
       addDebugInfo('🚀 Starting therapy session generation...');
+      addDebugInfo(`💡 Idea: "${idea.substring(0, 50)}..."`);
+      addDebugInfo(`🤖 Therapist: ${therapist.name} (${therapist.personality})`);
+      addDebugInfo(`👤 User: ${user?.email || 'Not authenticated'}`);
       
       // Save idea to database first
       const savedIdeaId = await saveIdeaToDatabase();
       setIdeaId(savedIdeaId);
       
-      // Test API connections first
-      addDebugInfo('🔧 Testing API connections...');
-      const tavusConnected = await tavusApiRef.current.testConnection();
-      addDebugInfo(`Tavus API: ${tavusConnected ? '✅ Connected' : '❌ Failed'}`);
-      
-      // Run replica debug if connected
-      if (tavusConnected) {
-        addDebugInfo('🔧 Running replica diagnostics...');
-        await tavusApiRef.current.debugReplicas();
-      }
-      
       // Generate therapy script using OpenRouter LLM with therapist-specific prompt
       addDebugInfo(`🤖 Generating therapy script with ${therapist.name}...`);
-      const script = await openRouterApiRef.current.generateTherapyScript(
-        idea, 
-        therapist.personality, 
-        therapist.name
-      );
+      let script: string;
+      try {
+        script = await openRouterApiRef.current.generateTherapyScript(
+          idea, 
+          therapist.personality, 
+          therapist.name
+        );
+        addDebugInfo(`✅ Generated script (${script.length} characters)`);
+      } catch (error) {
+        addDebugInfo(`⚠️ Script generation failed, using fallback: ${error}`);
+        script = generateFallbackScript(idea, therapist);
+      }
+      
       setGeneratedScript(script);
-      addDebugInfo(`✅ Generated script (${script.length} characters)`);
       
       // Save therapy session to database
       const savedSessionId = await saveTherapySession(savedIdeaId, script);
@@ -253,21 +300,19 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       
       setGenerationStage('video');
       
-      // Get a guaranteed valid stock replica
-      addDebugInfo('🎭 Getting valid stock replica...');
-      const validReplicaId = await tavusApiRef.current.getValidStockReplica();
-      addDebugInfo(`✅ Selected valid replica: ${validReplicaId}`);
-      
-      // Generate video with Tavus using validated replica
-      const videoRequest = {
-        replica_id: validReplicaId,
-        script: script,
-        video_name: `${therapist.name} - Startup Therapy Session`,
-        fast: true // Use fast rendering for quicker generation
-      };
-      
+      // Try to generate video with Tavus
       try {
-        addDebugInfo('🎬 Starting video generation with Tavus...');
+        addDebugInfo('🎬 Attempting video generation with Tavus...');
+        const validReplicaId = await tavusApiRef.current.getValidStockReplica();
+        addDebugInfo(`✅ Selected valid replica: ${validReplicaId}`);
+        
+        const videoRequest = {
+          replica_id: validReplicaId,
+          script: script,
+          video_name: `${therapist.name} - Startup Therapy Session`,
+          fast: true
+        };
+        
         const videoResponse = await tavusApiRef.current.generateVideo(videoRequest);
         setVideoData(videoResponse);
         addDebugInfo(`✅ Video generation started: ${videoResponse.video_id}`);
@@ -277,7 +322,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
           video_url: videoResponse.hosted_url || videoResponse.download_url
         });
         
-        // Poll for video completion
+        // Poll for video completion if not ready
         if (videoResponse.status !== 'ready') {
           addDebugInfo('🔄 Starting video status polling...');
           pollVideoStatus(videoResponse.video_id, savedSessionId);
@@ -302,40 +347,126 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addDebugInfo(`❌ Session generation failed: ${errorMessage}`);
       console.error('❌ Error generating therapy session:', error);
-      // Fallback to simulation
+      
+      // Fallback to simulation with generated script
+      const fallbackScript = generateFallbackScript(idea, therapist);
+      setGeneratedScript(fallbackScript);
+      
       setTimeout(() => {
         setIsGenerating(false);
         setShowResults(true);
-      }, 3000);
+      }, 2000);
     }
+  };
+
+  const generateFallbackScript = (idea: string, therapist: Therapist): string => {
+    const scripts = {
+      'Brutally Honest': `Listen, I've analyzed "${idea.substring(0, 50)}..." and here's the reality check you need.
+
+First, let's talk market validation. Have you actually spoken to potential customers? Because building something nobody wants is the fastest way to burn through your savings.
+
+The execution complexity here is significant. You're looking at months of development, and that's assuming everything goes perfectly - which it never does.
+
+However, there's potential here if you can nail the fundamentals. Focus on solving one specific problem really well before expanding.
+
+My advice? Start with an MVP, validate demand, then iterate. And please, don't quit your day job until you have paying customers.
+
+Score: 6.5/10 - Promising but needs serious validation work.`,
+
+      'Encouraging': `What an exciting concept! "${idea.substring(0, 50)}..." shows real innovation and creativity.
+
+I love how you're thinking about solving real problems. The market opportunity here is substantial, and your timing couldn't be better.
+
+The monetization potential is strong - you could start with a freemium model, add premium features, and explore partnerships as you scale.
+
+Yes, there will be challenges, but every successful entrepreneur faces obstacles. That's what makes the journey so rewarding!
+
+Your passion for this idea really comes through, and that's half the battle. With the right execution and persistence, this could be something special.
+
+My advice? Start building your MVP immediately. Get user feedback early and often. Trust your instincts - you're onto something here!
+
+Score: 8.2/10 - Brilliant potential with strong market fit!`,
+
+      'Witty & Sharp': `Well, well... "${idea.substring(0, 50)}..." - I have to say, it's certainly... creative.
+
+The complexity of execution is only slightly terrifying, but hey, if you enjoy impossible challenges and sleepless nights, this is perfect for you.
+
+Your target market might exist somewhere between unicorn enthusiasts and people who collect vintage air, but stranger things have succeeded in Silicon Valley.
+
+The monetization strategy is about as clear as mud in a thunderstorm, but I'm sure you'll figure that out... eventually.
+
+Look, I'm not saying it's impossible. I'm just saying you might want to simplify it until your grandmother can explain it to her cat.
+
+But who knows? Maybe you'll prove me wrong and I'll be eating my words with a side of humble pie.
+
+Score: 7.1/10 - Ambitious to the point of mild insanity, but that's not always bad.`,
+
+      'Wise & Experienced': `Ah, "${idea.substring(0, 50)}..." - this reminds me of several breakthrough companies I've observed over the decades.
+
+In my experience, the market timing appears favorable for this type of innovation. We're seeing similar patterns to what preceded major disruptions in adjacent industries.
+
+The key to success here will be execution discipline and strategic patience. I've seen brilliant ideas fail due to premature scaling, and mediocre ideas succeed through methodical execution.
+
+Your competitive moat will be critical. Focus on building defensible advantages - whether through network effects, data advantages, or operational excellence.
+
+The path forward requires three phases: validation, optimization, then scaling. Each phase has distinct challenges and success metrics.
+
+My strategic counsel? Build your foundation methodically. The entrepreneurs who succeed long-term are those who master the fundamentals before pursuing growth.
+
+Score: 7.8/10 - Strong strategic potential with proper execution discipline.`,
+
+      'Disruptive Thinker': `"${idea.substring(0, 50)}..." - NOW THIS is what I'm talking about! You're not just thinking outside the box, you're setting the box on fire!
+
+This has the potential to completely disrupt established players. The incumbents won't see this coming, and that's exactly where you want to be.
+
+Forget conventional wisdom. Forget "best practices." The biggest wins come from challenging everything everyone thinks they know.
+
+The beauty of this approach is that it makes the competition irrelevant. While they're playing checkers, you're inventing a new game entirely.
+
+Don't let anyone tell you to "be realistic." Reality is for people who lack imagination. Build something so revolutionary that people have no choice but to pay attention.
+
+My challenge to you? Move fast and break things. Build something that makes the entire industry scramble to catch up.
+
+Score: 8.7/10 - Revolutionary potential that could reshape everything!`
+    };
+
+    return scripts[therapist.personality as keyof typeof scripts] || scripts['Brutally Honest'];
   };
 
   const completeSession = async (sessionId: string, script: string) => {
     try {
+      addDebugInfo('🎯 Completing therapy session...');
+      
       // Calculate score and verdict
       const feedback = getTherapistFeedback(script);
+      addDebugInfo(`📊 Generated feedback: ${feedback.verdict} (${feedback.score}/10)`);
       
-      // Update therapy session with results
-      await updateTherapySession(sessionId, {
-        score: feedback.score,
-        verdict: feedback.verdict,
-        insights: feedback.insights,
-        advice: feedback.advice,
-        status: 'completed'
-      });
+      // Update therapy session with results (only if not demo)
+      if (!sessionId.startsWith('demo_')) {
+        await updateTherapySession(sessionId, {
+          score: feedback.score,
+          verdict: feedback.verdict,
+          insights: feedback.insights,
+          advice: feedback.advice,
+          status: 'completed'
+        });
+        
+        // Update user profile stats
+        await updateUserProfile(feedback.score);
+        
+        // Add to leaderboard if score is high enough
+        await addToLeaderboard(sessionId, feedback.score, feedback.verdict);
+        
+        // Update idea status
+        if (ideaId && !ideaId.startsWith('demo_')) {
+          await supabase
+            .from('ideas')
+            .update({ status: 'completed' })
+            .eq('id', ideaId);
+        }
+      }
       
-      // Update user profile stats
-      await updateUserProfile(feedback.score);
-      
-      // Add to leaderboard if score is high enough
-      await addToLeaderboard(sessionId, feedback.score, feedback.verdict);
-      
-      // Update idea status
-      await supabase
-        .from('ideas')
-        .update({ status: 'completed' })
-        .eq('id', ideaId);
-      
+      addDebugInfo('✅ Session completed successfully');
       setIsGenerating(false);
       setShowResults(true);
     } catch (error) {
@@ -360,9 +491,11 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
         
         if (status.status === 'ready') {
           addDebugInfo('✅ Video generation completed!');
-          await updateTherapySession(sessionId, {
-            video_url: status.hosted_url || status.download_url
-          });
+          if (!sessionId.startsWith('demo_')) {
+            await updateTherapySession(sessionId, {
+              video_url: status.hosted_url || status.download_url
+            });
+          }
           await completeSession(sessionId, generatedScript);
           return;
         }
@@ -397,10 +530,12 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
       setAudioBlob(audioBlob);
       addDebugInfo('✅ Audio generated successfully');
       
-      // Update session with audio info (in real app, you'd upload the blob and store URL)
-      await updateTherapySession(sessionId, {
-        audio_url: 'generated_audio_blob' // Placeholder
-      });
+      // Update session with audio info (only if not demo)
+      if (!sessionId.startsWith('demo_')) {
+        await updateTherapySession(sessionId, {
+          audio_url: 'generated_audio_blob' // Placeholder
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown audio error';
       addDebugInfo(`❌ Audio generation failed: ${errorMessage}`);
@@ -581,7 +716,7 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             <div className="mb-4">
               <button
                 onClick={() => setShowDebug(!showDebug)}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mx-auto"
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mx-auto transition-colors"
               >
                 <Bug className="w-4 h-4" />
                 <span>{showDebug ? 'Hide' : 'Show'} Debug Info</span>
@@ -589,18 +724,22 @@ export const TherapySession: React.FC<TherapySessionProps> = ({ idea, therapist,
             </div>
             
             {/* Debug Information */}
-            {showDebug && debugInfo.length > 0 && (
-              <details open className="bg-gray-100 rounded-lg p-4 text-left mb-4">
-                <summary className="cursor-pointer text-gray-700 font-medium mb-2 flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Real-time Debug Information</span>
-                </summary>
-                <div className="space-y-1 text-xs text-gray-600 max-h-40 overflow-y-auto">
-                  {debugInfo.map((info, index) => (
-                    <div key={index} className="font-mono">{info}</div>
-                  ))}
+            {showDebug && (
+              <div className="bg-gray-100 rounded-lg p-4 text-left mb-4 max-w-2xl mx-auto">
+                <div className="flex items-center space-x-2 mb-3">
+                  <AlertCircle className="w-5 h-5 text-blue-600" />
+                  <span className="font-medium text-gray-900">Real-time Debug Information</span>
                 </div>
-              </details>
+                <div className="space-y-1 text-xs text-gray-600 max-h-40 overflow-y-auto bg-white rounded-lg p-3">
+                  {debugInfo.length > 0 ? (
+                    debugInfo.map((info, index) => (
+                      <div key={index} className="font-mono">{info}</div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 italic">Initializing debug logging...</div>
+                  )}
+                </div>
+              </div>
             )}
             
             {videoError && (
