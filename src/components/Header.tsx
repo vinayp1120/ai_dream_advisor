@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { Brain, Sparkles, User, LogOut, Settings, Crown } from 'lucide-react';
+import { Brain, Sparkles, User, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useSubscription } from '../hooks/useSubscription';
 import { AuthModal } from './AuthModal';
-import { PremiumUpgradeModal } from './PremiumUpgradeModal';
 
 interface HeaderProps {
   onNavigate?: (section: string) => void;
@@ -11,18 +9,9 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, profile, signOut, isAuthenticated } = useAuth();
-  const { isSubscribed, subscriptionTier } = useSubscription();
-
-  // Listen for upgrade modal events
-  React.useEffect(() => {
-    const handleOpenUpgradeModal = () => setShowUpgradeModal(true);
-    window.addEventListener('openUpgradeModal', handleOpenUpgradeModal);
-    return () => window.removeEventListener('openUpgradeModal', handleOpenUpgradeModal);
-  }, []);
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
@@ -51,35 +40,11 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
     onNavigate?.('home');
   };
 
-  const handleUpgrade = () => {
-    setShowUserMenu(false);
-    setShowUpgradeModal(true);
-  };
-
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
-  };
-
-  const getSubscriptionBadge = () => {
-    if (!isAuthenticated) return null;
-    
-    if (isSubscribed || subscriptionTier === 'premium') {
-      return (
-        <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
-          <Crown className="w-3 h-3 mr-1" />
-          Premium
-        </span>
-      );
-    }
-    
-    return (
-      <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
-        Free
-      </span>
-    );
   };
 
   return (
@@ -133,47 +98,25 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
                 <div className="relative">
                   <button
                     onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-full hover:shadow-lg transition-all"
+                    className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-full hover:shadow-lg transition-all"
                   >
                     <User className="w-4 h-4" />
-                    <div className="hidden sm:block text-left">
-                      <div className="text-sm font-medium">
-                        {profile?.full_name || user?.email?.split('@')[0] || 'User'}
-                      </div>
-                      {getSubscriptionBadge()}
-                    </div>
+                    <span className="hidden sm:inline">
+                      {profile?.full_name || user?.email?.split('@')[0] || 'User'}
+                    </span>
                   </button>
                   
                   {showUserMenu && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2">
-                      <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-2">
+                      <div className="px-4 py-2 border-b border-gray-100">
                         <p className="text-sm font-medium text-gray-900">
                           {profile?.full_name || 'User'}
                         </p>
                         <p className="text-xs text-gray-500">{user?.email}</p>
-                        <div className="mt-2 flex items-center space-x-2">
-                          {getSubscriptionBadge()}
-                          {!isSubscribed && subscriptionTier === 'free' && (
-                            <button
-                              onClick={handleUpgrade}
-                              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                            >
-                              Upgrade
-                            </button>
-                          )}
-                        </div>
+                        <p className="text-xs text-blue-600 capitalize">
+                          {profile?.subscription_tier || 'free'} plan
+                        </p>
                       </div>
-                      
-                      {!isSubscribed && subscriptionTier === 'free' && (
-                        <button
-                          onClick={handleUpgrade}
-                          className="w-full text-left px-4 py-3 text-sm text-yellow-700 hover:bg-yellow-50 flex items-center space-x-2 border-b border-gray-100"
-                        >
-                          <Crown className="w-4 h-4" />
-                          <span>Upgrade to Premium</span>
-                        </button>
-                      )}
-                      
                       <button
                         onClick={() => {
                           setShowUserMenu(false);
@@ -217,12 +160,9 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
               {isAuthenticated ? (
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-2 rounded-full relative"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-2 rounded-full"
                 >
                   <User className="w-5 h-5" />
-                  {!isSubscribed && subscriptionTier === 'free' && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full"></div>
-                  )}
                 </button>
               ) : (
                 <button
@@ -241,11 +181,6 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         initialMode={authMode}
-      />
-
-      <PremiumUpgradeModal
-        isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
       />
     </>
   );

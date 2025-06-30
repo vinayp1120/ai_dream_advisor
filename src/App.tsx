@@ -40,25 +40,11 @@ function App() {
   };
 
   const handleIdeaSubmit = (idea: string, method: 'text' | 'voice') => {
-    console.log('App: Idea submitted:', { idea: idea.substring(0, 50) + '...', method });
-    
-    if (!idea || idea.trim().length < 10) {
-      console.error('Invalid idea submitted');
-      return;
-    }
-    
-    setSubmittedIdea(idea.trim());
+    setSubmittedIdea(idea);
     setCurrentState('therapist');
   };
 
   const handleTherapistSelect = (therapist: Therapist) => {
-    console.log('App: Therapist selected:', therapist.name);
-    
-    if (!therapist || !submittedIdea) {
-      console.error('Invalid therapist or missing idea');
-      return;
-    }
-    
     setSelectedTherapist(therapist);
     setCurrentState('session');
   };
@@ -103,17 +89,11 @@ function App() {
         break;
       case 'home':
         setCurrentState('home');
-        // Reset state when going home
-        setSubmittedIdea('');
-        setSelectedTherapist(null);
         break;
       default:
         // For other sections, scroll to them on home page
         if (currentState !== 'home') {
           setCurrentState('home');
-          // Reset state when going home
-          setSubmittedIdea('');
-          setSelectedTherapist(null);
           // Wait for state change then scroll
           setTimeout(() => {
             const element = document.getElementById(section);
@@ -155,28 +135,14 @@ function App() {
           />
         );
       case 'session':
-        return selectedTherapist && submittedIdea ? (
+        return selectedTherapist ? (
           <TherapySession 
             idea={submittedIdea}
             therapist={selectedTherapist}
             onBack={handleBack}
             onMintNFT={handleMintNFT}
           />
-        ) : (
-          // Fallback if data is missing
-          <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-orange-50 flex items-center justify-center">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Session Error</h2>
-              <p className="text-gray-600 mb-6">Missing required data for therapy session.</p>
-              <button
-                onClick={() => setCurrentState('home')}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                Return Home
-              </button>
-            </div>
-          </div>
-        );
+        ) : null;
       case 'nft':
         return (
           <NFTMinting 
