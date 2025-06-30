@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { MessageSquare, Mic, Send, Loader, MicOff, Volume2, ArrowLeft, Brain, Sparkles } from 'lucide-react';
+import { MessageSquare, Mic, Send, Loader, MicOff, Volume2, ArrowLeft, Brain, Sparkles, AlertCircle } from 'lucide-react';
 import { AudioRecorder } from '../utils/audioRecorder';
 import { ElevenLabsAPI } from '../utils/elevenLabsApi';
 
@@ -17,6 +17,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -26,10 +27,33 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
     onBack();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (idea.trim()) {
-      onSubmit(idea, method);
+    
+    if (!idea.trim()) {
+      alert('Please enter your idea before submitting.');
+      return;
+    }
+
+    if (idea.trim().length < 10) {
+      alert('Please provide more details about your idea (at least 10 characters).');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      console.log('Submitting idea:', { idea: idea.substring(0, 50) + '...', method });
+      
+      // Small delay to show loading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Call the onSubmit callback
+      onSubmit(idea.trim(), method);
+    } catch (error) {
+      console.error('Error submitting idea:', error);
+      alert('Failed to submit idea. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -186,12 +210,12 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                   <button
                     type="button"
                     onClick={handleVoiceRecord}
-                    disabled={isTranscribing}
+                    disabled={isTranscribing || isSubmitting}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
                       method === 'voice' 
                         ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' 
                         : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
-                    } ${isTranscribing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${(isTranscribing || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {isRecording ? (
                       <MicOff className="w-5 h-5 text-red-500 animate-pulse" />
@@ -206,19 +230,29 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                 </div>
 
                 {transcriptionError && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start space-x-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                     <p className="text-yellow-800 text-sm">{transcriptionError}</p>
                   </div>
                 )}
 
                 {method === 'text' ? (
-                  <textarea
-                    value={idea}
-                    onChange={(e) => setIdea(e.target.value)}
-                    placeholder="Describe your startup idea in detail... The weirder, the better!"
-                    className="w-full h-32 p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-700 placeholder-gray-400"
-                    required
-                  />
+                  <div>
+                    <textarea
+                      value={idea}
+                      onChange={(e) => setIdea(e.target.value)}
+                      placeholder="Describe your startup idea in detail... The weirder, the better! (minimum 10 characters)"
+                      className="w-full h-32 p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-700 placeholder-gray-400"
+                      required
+                      minLength={10}
+                      disabled={isSubmitting}
+                    />
+                    <div className="mt-2 text-right">
+                      <span className={`text-sm ${idea.length < 10 ? 'text-red-500' : 'text-gray-500'}`}>
+                        {idea.length}/10 minimum characters
+                      </span>
+                    </div>
+                  </div>
                 ) : (
                   <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center">
                     {isRecording ? (
@@ -255,7 +289,7 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                             <button
                               type="button"
                               onClick={playRecording}
-                              disabled={isPlaying}
+                              disabled={isPlaying || isSubmitting}
                               className="flex items-center space-x-2 bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
                             >
                               <Volume2 className="w-4 h-4" />
@@ -264,7 +298,8 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                             <button
                               type="button"
                               onClick={startRecording}
-                              className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors"
+                              disabled={isSubmitting}
+                              className="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition-colors disabled:opacity-50"
                             >
                               Record Again
                             </button>
@@ -288,17 +323,27 @@ export const IdeaSubmission: React.FC<IdeaSubmissionProps> = ({ onSubmit, onBack
                 <button
                   type="button"
                   onClick={onBack}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+                  disabled={isSubmitting}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   Back
                 </button>
                 <button
                   type="submit"
-                  disabled={!idea.trim() || isRecording || isTranscribing}
+                  disabled={!idea.trim() || idea.trim().length < 10 || isRecording || isTranscribing || isSubmitting}
                   className="flex-1 flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span>Submit for Therapy</span>
-                  <Send className="w-5 h-5" />
+                  {isSubmitting ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Submit for Therapy</span>
+                      <Send className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
               </div>
             </form>
